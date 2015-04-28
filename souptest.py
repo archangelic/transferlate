@@ -68,8 +68,6 @@ def get_photo_archive():
 			with open('photos/'+pic_id, 'a') as myFile:
 				myFile.write(url+'\n')
 				myFile.write(source)
-			print(url)
-			print(source)
 
 if os.listdir('photos') == []:
 	get_photo_archive()
@@ -84,7 +82,6 @@ while not has_subtitles:
 		command = ('youtube-dl --no-playlist --write-sub --write-auto-sub --sub-lang "en" --skip-download "%s" --restrict-filenames' % (chosen_one,))
 		call(shlex.split(command))
 		contents = os.listdir('.')
-		print("DEBUG", contents)
 		for each in contents:
 			if each.endswith('.srt'):
 				subs = pysrt.open(each)
@@ -98,16 +95,11 @@ long_enough = False
 while not long_enough:
 	rand_section = random.choice(subs)
 	rand_quote = rand_section.text
-	print('DEBUG rand_quote first-', rand_quote)
 	translation = gs.translate(rand_quote, rand_lang).encode('utf-8')
-	print('DEBUG translation-', translation)
-	print('DEBUG rand_lang-', rand_lang)
 	retranslate = gs.translate(translation, 'en')
-	print('DEBUG retranslate-', retranslate)
 	if (len(retranslate.split()) > 6) and (len(retranslate.split()) < 15):
 		long_enough = True
 
-print('DEBUG rand_quote final-', rand_quote)
 transfer_quote = retranslate.replace('\n', '--!--')
 
 banned_tags = {'is':1, 'are':1, 'do':1, 'the':1, 'an':1, 'of':1, 'at':1, 'on':1, 'i':1, 'me':1, 'you':1, 'a':1, 'to':1, 'from':1, 'and':1, 'or':1, 'but':1, 'we':1, 'us':1, 'in':1, 'he':1, 'she':1, 'they':1, 'not':1, 'no':1, 'yes':1}
@@ -119,13 +111,10 @@ for i in range(1,20):
 	if (tag.lower() not in tagdict) and (tag.lower() not in banned_tags) and (len(taglist) < 4):
 		tagdict[tag] = 1
 		taglist.append(tag)
-print(taglist)
 tags = ''
 for each in taglist:
 	tags = tags + each + ','
 tags = tags + langs[rand_lang]
-print(tags)
-
 
 rand_pic, archive, url, source = get_photo(os.listdir('photos'))
 newphoto = False
