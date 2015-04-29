@@ -35,7 +35,8 @@ banned_tags = {'is':1, 'are':1, 'do':1, 'the':1, 'an':1,
 			   'or':1, 'but':1, 'we':1, 'us':1, 'in':1,
 			   'he':1, 'she':1, 'they':1, 'not':1, 'no':1,
 			   'yes':1, 'it':1, 'be':1, 'was':1, 'as':1,
-			  'this':1, 'with':1, 'like':1, 'there':1, 'for':1}
+			   'this':1, 'with':1, 'like':1, 'there':1, 'for':1,
+			   'her':1, 'him':1, 'them':1}
 		
 def get_photo(photodir): # Picks a random photo and grabs data to give to the script
 	rand_pic = random.choice(photodir)
@@ -75,38 +76,47 @@ def get_photo_archive(): # Builds the photo archive
 				with open('photos/'+pic_id, 'a') as myFile:
 					myFile.write(url+'\n')
 					myFile.write(source)
+					
+def get_subs(yt_links):
+	has_subtitles = False
+	while not has_subtitles:
+		if yt_links != {}:
+			chosen_key = random.choice(list(yt_links.keys()))
+			chosen_one = yt_links[chosen_key]
+			command = ('/usr/local/bin/youtube-dl -q --no-warnings --no-playlist --write-sub --write-auto-sub --sub-lang "en" --skip-download "%s" --restrict-filenames' % (chosen_one,))
+			call(shlex.split(command))
+			contents = os.listdir('.')
+			for each in contents:
+				if each.endswith('.srt'):
+					subs = pysrt.open(each)
+					has_subtitles = True
+			if not has_subtitles:
+				yt_links.pop(chosen_key)
+		else:
+			yt_links = get_videos()
+	return subs
 
 # If we don't have photos, get some photos
 if not os.listdir('photos'):
 	get_photo_archive()
 # Pick a video with subtitles to gather random text from
 yt_links = get_videos()
-has_subtitles = False
-while not has_subtitles:
-	if yt_links != {}:
-		chosen_key = random.choice(list(yt_links.keys()))
-		chosen_one = yt_links[chosen_key]
-		print("CHOSEN!", chosen_one)
-		command = ('/usr/local/bin/youtube-dl -q --no-warnings --no-playlist --write-sub --write-auto-sub --sub-lang "en" --skip-download "%s" --restrict-filenames' % (chosen_one,))
-		call(shlex.split(command))
-		contents = os.listdir('.')
-		for each in contents:
-			if each.endswith('.srt'):
-				subs = pysrt.open(each)
-				has_subtitles = True
-		if not has_subtitles:
-			yt_links.pop(chosen_key)
-	else:
-		yt_links = get_videos()
+subs = get_subs(yt_links)
 # Time to pick our text from the subs and make sure the translated string is long enough
 long_enough = False
+x = 0
 while not long_enough:
+	if x == 10:
+		yt_links = get_videos()
+		subs = get_subs(yt_links)
+		x = 0
 	rand_section = random.choice(subs)
 	rand_quote = rand_section.text
 	translation = gs.translate(rand_quote, rand_lang).encode('utf-8')
 	retranslate = gs.translate(translation, 'en')
 	if (len(retranslate.split()) > 6) and (len(retranslate.split()) < 15):
 		long_enough = True
+	x += 1
 # Prepare a version of the quote to be passed to tumblr.py
 transfer_quote = retranslate.replace('\n', '--!--')
 # Make some tags! Gotta promote through randomness!
