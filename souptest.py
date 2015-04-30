@@ -36,14 +36,16 @@ banned_tags = {'is':1, 'are':1, 'do':1, 'the':1, 'an':1,
 			   'he':1, 'she':1, 'they':1, 'not':1, 'no':1,
 			   'yes':1, 'it':1, 'be':1, 'was':1, 'as':1,
 			   'this':1, 'with':1, 'like':1, 'there':1, 'for':1,
-			   'her':1, 'him':1, 'them':1}
+			   'her':1, 'him':1, 'them':1, 'that':1, 'so':1, 
+			   'their':1}
 		
 def get_photo(photodir): # Picks a random photo and grabs data to give to the script
 	rand_pic = random.choice(photodir)
 	archive = os.path.join('photos', rand_pic)
+	print("DEBUG -", archive)
 	with open(archive) as pic:
-		url,source = pic.read().splitlines()
-	return rand_pic, archive, url, source
+		url,source,title,attrib = pic.read().splitlines()
+	return rand_pic, archive, url, source, title, attrib
 
 def get_videos(): # Gets videos by scraping the youtube search page for links
 	rand_word = random.choice(wordlist)
@@ -61,20 +63,34 @@ def get_photo_archive(): # Builds the photo archive
 	apikey = fconf['apikey']
 	apisecret = fconf['apisecret']
 	flickr = flickrapi.FlickrAPI(apikey, apisecret)
+	licenses = flickr.photos.licenses.getInfo()
+	lic_dict = {}
+	for each in licenses[0]:
+		lic_dict[each.get('id')] = each.get('url')
 	for each in range(1,30):
 		rand_word = random.choice(wordlist)	
-		photos = flickr.photos.search(text=rand_word, extras='url_l,url_o,path_alias', license='2,4,7,9,10', safesearch='1', tags='landscape,nature,space', content_type='1')
+		photos = flickr.photos.search(text=rand_word, extras='url_l,url_o,path_alias,owner_name,license', license='2,4,7', safesearch='1', tags='landscape,nature,space', content_type='1')
 		for pic in photos[0]:
 			if pic.get('pathalias'):
+				title = pic.get('title')
 				pic_id= pic.get('id')
-				owner = pic.get('pathalias')
+				owner_url = pic.get('pathalias')
+				owner = pic.get('ownername')
 				if not pic.get('url_l'):
 					url = pic.get('url_o')+','+pic.get('width_o')+','+pic.get('height_o')
 				else:
 					url = pic.get('url_l')+','+pic.get('width_l')+','+pic.get('height_l')
-				source = ('https://www.flickr.com/photos/%s/%s' % (owner, pic_id))
-				with open('photos/'+pic_id, 'a') as myFile:
+				img_page = ('https://www.flickr.com/photos/%s/%s' % (owner_url, pic_id))
+				pic_lic = pic.get('license')
+				if pic_lic == '2':
+					source = title+'\n'+owner+','+("https://www.flickr.com/photos/%s" % (owner_url))+',CC BY-NC,'+lic_dict[pic_lic]
+				elif pic_lic == '4':
+					source = title+'\n'+owner+','+("https://www.flickr.com/photos/%s" % (owner_url))+',CC BY,'+lic_dict[pic_lic]
+				elif pic_lic == '7':
+					source = title+'\n'+'NONE,'+owner+','+("https://www.flickr.com/photos/%s" % (owner_url))
+				with open('photos/'+pic_id, 'w') as myFile:
 					myFile.write(url+'\n')
+					myFile.write(img_page+'\n')
 					myFile.write(source)
 					
 def get_subs(yt_links):
@@ -96,80 +112,100 @@ def get_subs(yt_links):
 			yt_links = get_videos()
 	return subs
 
-# If we don't have photos, get some photos
-if not os.listdir('photos'):
-	get_photo_archive()
-# Pick a video with subtitles to gather random text from
-yt_links = get_videos()
-subs = get_subs(yt_links)
-# Time to pick our text from the subs and make sure the translated string is long enough
-long_enough = False
-x = 0
-while not long_enough:
-	if x == 10:
-		yt_links = get_videos()
-		subs = get_subs(yt_links)
-		x = 0
-	rand_section = random.choice(subs)
-	rand_quote = rand_section.text
-	translation = gs.translate(rand_quote, rand_lang).encode('utf-8')
-	retranslate = gs.translate(translation, 'en')
-	if (len(retranslate.split()) > 6) and (len(retranslate.split()) < 15):
-		long_enough = True
-	x += 1
-# Prepare a version of the quote to be passed to tumblr.py
-transfer_quote = retranslate.replace('\n', '--!--')
-# Make some tags! Gotta promote through randomness!
-tags_split = retranslate.split()
-tags_select = []
-for each in tags_split:
-	i = each.strip().strip("!@#$%^&*()-_=+,<.>/?;:'[]{}`~").lower()
-	if i:
-		tags_select.append(i)
-tagdict = {}
-taglist = []
-for i in range(1,100):
-	tag = random.choice(tags_select)
-	if (tag not in tagdict) and (tag not in banned_tags) and (len(taglist) < 4):
-		tagdict[tag] = 1
-		taglist.append(tag)
-tags = ''
-for each in taglist:
-	tags = tags + each + ','
-tags = tags + langs[rand_lang]
-# Pick a random photo and make sure it is one we haven't used before
-rand_pic, archive, url, source = get_photo(os.listdir('photos'))
-newphoto = False
-while not newphoto:
-	if os.listdir('photos') == []:
+def cleanup():
+	for each in os.listdir('.'):
+		if each.endswith('.srt'):
+			cmd = 'rm "'+each+'"'
+			call(shlex.split(cmd))
+		if each.endswith('.jpg') and (each != 'final.jpg'):
+			cmd = 'rm "'+each+'"'
+			call(shlex.split(cmd))
+
+def clean_quote(text):
+	print("DEBUG -", text)
+	text_trails = True
+	while text_trails:
+		text = text.strip().strip("@#$%^&*()-_=+,<>/;:'[]{}`~")
+		if text.strip('.?!').endswith((' and', ' an', ' the', ' but', ' or', ' nor', ' a')):
+			trail_len = len(text.split()[-1])
+			text = text[:-trail_len]
+		else:
+			text_trails = False
+	text = text.capitalize()
+	if not text.endswith(('.','!','?')):
+		text += '.'
+	print("DEBUG -", text)
+	return text
+
+if __name__ == '__main__':
+	# If we don't have photos, get some photos
+	if not os.listdir('photos'):
 		get_photo_archive()
-	elif (rand_pic in photolist):
-		cmd = 'rm '+archive
-		call(shlex(cmd))
-		rand_pic, archive, url, source = get_photo(os.listdir('photos'))
-	else:
-		newphoto = True
-url, width, height = url.split(',')
-# Download and add text to photo
-urllib.request.urlretrieve(url, rand_pic+'.jpg')
-width = str(int(width)-100)
-height = str(int(height)-100)
-cmd = '''convert -background none -gravity center -font Helvetica -fill white -stroke black -strokewidth 2 -size %sx%s\
-	caption:"%s"\
-	%s.jpg +swap -gravity center -composite final.jpg''' % (width, height, retranslate, rand_pic)
-call(shlex.split(cmd))
-# Add photo to list of used photos
-with open('photos.txt', 'a') as photos:
-	photos.write(rand_pic+'\n')
-# Create file to pass info to tumblr.py
-with open('translate.out', 'w') as output:
-	output.write(source+'\n'+transfer_quote+'\n'+tags)
-# Clean up after myself
-for each in os.listdir('.'):
-	if each.endswith('.srt'):
-		cmd = 'rm "'+each+'"'
-		call(shlex.split(cmd))
-	if each.endswith('.jpg') and (each != 'final.jpg'):
-		cmd = 'rm "'+each+'"'
-		call(shlex.split(cmd))
+	# Pick a video with subtitles to gather random text from
+	yt_links = get_videos()
+	subs = get_subs(yt_links)
+	# Time to pick our text from the subs and make sure the translated string is long enough
+	long_enough = False
+	x = 0
+	while not long_enough:
+		if x == 10:
+			cleanup()
+			yt_links = get_videos()
+			subs = get_subs(yt_links)
+			x = 0
+		rand_section = random.choice(subs)
+		rand_quote = rand_section.text.replace('\n', ' ')
+		translation = gs.translate(rand_quote, rand_lang).encode('utf-8')
+		retranslate = gs.translate(translation, 'en')
+		final_quote = clean_quote(retranslate)
+		if (len(final_quote.split()) > 6) and (len(final_quote.split()) < 15):
+			long_enough = True
+		x += 1
+	# Make some tags! Gotta promote through randomness!
+	tags_split = final_quote.split()
+	tags_select = []
+	for each in tags_split:
+		i = each.strip().strip(".!?@#$%^&*()-_=+,<>/;:'[]{}`~").lower()
+		if i:
+			tags_select.append(i)
+	tagdict = {}
+	taglist = []
+	for i in range(1,100):
+		tag = random.choice(tags_select)
+		if (tag not in tagdict) and (tag not in banned_tags) and (len(taglist) < 4):
+			tagdict[tag] = 1
+			taglist.append(tag)
+	tags = ''
+	for each in taglist:
+		tags = tags + each + ','
+	tags = tags + langs[rand_lang]
+	# Pick a random photo and make sure it is one we haven't used before
+	rand_pic, archive, url, source, title, attrib = get_photo(os.listdir('photos'))
+	newphoto = False
+	while not newphoto:
+		if os.listdir('photos') == []:
+			get_photo_archive()
+		elif (rand_pic in photolist):
+			cmd = 'rm '+archive
+			call(shlex.split(cmd))
+			rand_pic, archive, url, source, title, attrib = get_photo(os.listdir('photos'))
+		else:
+			newphoto = True
+	url, width, height = url.split(',')
+	# Download and add text to photo
+	urllib.request.urlretrieve(url, rand_pic+'.jpg')
+	width = str(int(width)-100)
+	height = str(int(height)-100)
+	cmd = '''convert -background none -gravity center -font Helvetica -fill white -stroke black -strokewidth 2 -size %sx%s\
+		caption:"%s"\
+		%s.jpg +swap -gravity center -composite final.jpg''' % (width, height, final_quote, rand_pic)
+	call(shlex.split(cmd))
+	# Add photo to list of used photos
+	with open('photos.txt', 'a') as photos:
+		photos.write(rand_pic+'\n')
+	# Create file to pass info to tumblr.py
+	with open('translate.out', 'w') as output:
+		output.write(source+'\n'+final_quote+'\n'+tags+'\n'+title+'\n'+attrib)
+	# Clean up after myself
+	cleanup()
 		
