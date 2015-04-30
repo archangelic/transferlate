@@ -37,7 +37,7 @@ banned_tags = {'is':1, 'are':1, 'do':1, 'the':1, 'an':1,
 			   'yes':1, 'it':1, 'be':1, 'was':1, 'as':1,
 			   'this':1, 'with':1, 'like':1, 'there':1, 'for':1,
 			   'her':1, 'him':1, 'them':1, 'that':1, 'so':1, 
-			   'their':1}
+			   'their':1, 'if':1, 'what':1}
 		
 def get_photo(photodir): # Picks a random photo and grabs data to give to the script
 	rand_pic = random.choice(photodir)
@@ -131,7 +131,7 @@ def clean_quote(text):
 			text = text[:-trail_len]
 		else:
 			text_trails = False
-	text = text.capitalize()
+	text = text[0].upper()+text[1:]
 	if not text.endswith(('.','!','?')):
 		text += '.'
 	print("DEBUG -", text)
