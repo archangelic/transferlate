@@ -42,7 +42,6 @@ banned_tags = {'is':1, 'are':1, 'do':1, 'the':1, 'an':1,
 def get_photo(photodir): # Picks a random photo and grabs data to give to the script
 	rand_pic = random.choice(photodir)
 	archive = os.path.join('photos', rand_pic)
-	print("DEBUG -", archive)
 	with open(archive) as pic:
 		url,source,title,attrib = pic.read().splitlines()
 	return rand_pic, archive, url, source, title, attrib
@@ -122,7 +121,6 @@ def cleanup():
 			call(shlex.split(cmd))
 
 def clean_quote(text):
-	print("DEBUG -", text)
 	text_trails = True
 	while text_trails:
 		text = text.strip().strip("@#$%^&*()-_=+,<>/;:'[]{}`~")
@@ -134,7 +132,6 @@ def clean_quote(text):
 	text = text[0].upper()+text[1:]
 	if not text.endswith(('.','!','?')):
 		text += '.'
-	print("DEBUG -", text)
 	return text
 
 if __name__ == '__main__':
