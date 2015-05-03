@@ -1,3 +1,4 @@
+#!/usr/bin/python2
 import pytumblr, os.path, shlex
 from configobj import ConfigObj as configobj
 from subprocess import call
@@ -22,12 +23,12 @@ def post_it(flickr,quote,trans_tags):
 	
 def build_attrib(flickr,quote,title,attrib):
 	if attrib.split(',')[0] == 'NONE':
-		owner,profile = attrib.split(',')[1:]
+		owner,profile = attrib.split('--!--')[1:]
 		caption = """>`%s`
 
 Photo: [%s](%s) from [%s](%s)""" % (quote,title,flickr,owner,profile)
 	else:
-		owner,profile,lic,lic_url = attrib.split(',')
+		owner,profile,lic,lic_url = attrib.split('--!--')
 		caption = """>`%s`
 
 Photo: [%s](%s) by [%s](%s) licensed under [%s](%s)""" % (quote,title,flickr,owner,profile,lic,lic_url)
