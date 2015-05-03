@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import urllib.request, urllib.error, urllib.parse
 import random, shlex, os, pysrt, goslate, flickrapi
 from bs4 import BeautifulSoup
@@ -29,15 +30,12 @@ for each in old_photos:
 if not os.path.exists('photos'):
     os.makedirs('photos')
 # List of words that don't make for good tags
-banned_tags = {'is':1, 'are':1, 'do':1, 'the':1, 'an':1, 
-			   'of':1, 'at':1, 'on':1, 'i':1, 'me':1, 
-			   'you':1, 'a':1, 'to':1, 'from':1, 'and':1,
-			   'or':1, 'but':1, 'we':1, 'us':1, 'in':1,
-			   'he':1, 'she':1, 'they':1, 'not':1, 'no':1,
-			   'yes':1, 'it':1, 'be':1, 'was':1, 'as':1,
-			   'this':1, 'with':1, 'like':1, 'there':1, 'for':1,
-			   'her':1, 'him':1, 'them':1, 'that':1, 'so':1, 
-			   'their':1, 'if':1, 'what':1}
+banned_tags = {}
+with open('banned.txt') as banned:
+	banned_list = banned.read().splitlines()
+for each in banned_list:
+	if each:
+		banned_tags[each] = 1
 		
 def get_photo(photodir): # Picks a random photo and grabs data to give to the script
 	rand_pic = random.choice(photodir)
@@ -64,11 +62,12 @@ def get_photo_archive(): # Builds the photo archive
 	flickr = flickrapi.FlickrAPI(apikey, apisecret)
 	licenses = flickr.photos.licenses.getInfo()
 	lic_dict = {}
+	tagchoices = ['landscape', 'nature', 'space']
 	for each in licenses[0]:
 		lic_dict[each.get('id')] = each.get('url')
 	for each in range(1,30):
 		rand_word = random.choice(wordlist)	
-		photos = flickr.photos.search(text=rand_word, extras='url_l,url_o,path_alias,owner_name,license', license='2,4,7', safesearch='1', tags='landscape,nature,space', content_type='1')
+		photos = flickr.photos.search(text=rand_word, extras='url_l,url_o,path_alias,owner_name,license', license='2,4,7', safesearch='1', tags=random.choice(tagchoices), tag_mode='all', content_type='1')
 		for pic in photos[0]:
 			if pic.get('pathalias'):
 				title = pic.get('title')
@@ -82,11 +81,11 @@ def get_photo_archive(): # Builds the photo archive
 				img_page = ('https://www.flickr.com/photos/%s/%s' % (owner_url, pic_id))
 				pic_lic = pic.get('license')
 				if pic_lic == '2':
-					source = title+'\n'+owner+','+("https://www.flickr.com/photos/%s" % (owner_url))+',CC BY-NC,'+lic_dict[pic_lic]
+					source = title+'\n'+owner+'--!--'+("https://www.flickr.com/photos/%s" % (owner_url))+'--!--CC BY-NC--!--'+lic_dict[pic_lic]
 				elif pic_lic == '4':
-					source = title+'\n'+owner+','+("https://www.flickr.com/photos/%s" % (owner_url))+',CC BY,'+lic_dict[pic_lic]
+					source = title+'\n'+owner+'--!--'+("https://www.flickr.com/photos/%s" % (owner_url))+'--!--CC BY--!--'+lic_dict[pic_lic]
 				elif pic_lic == '7':
-					source = title+'\n'+'NONE,'+owner+','+("https://www.flickr.com/photos/%s" % (owner_url))
+					source = title+'\n'+'NONE--!--'+owner+'--!--'+("https://www.flickr.com/photos/%s" % (owner_url))
 				with open('photos/'+pic_id, 'w') as myFile:
 					myFile.write(url+'\n')
 					myFile.write(img_page+'\n')
@@ -205,4 +204,3 @@ if __name__ == '__main__':
 		output.write(source+'\n'+final_quote+'\n'+tags+'\n'+title+'\n'+attrib)
 	# Clean up after myself
 	cleanup()
-		
