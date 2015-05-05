@@ -1,48 +1,65 @@
 #!/usr/bin/python3
 import urllib.request, urllib.error, urllib.parse
 import random, shlex, os, pysrt, goslate, flickrapi
+import sqlite3 as lite
 from bs4 import BeautifulSoup
 from subprocess import call
 from configobj import ConfigObj as configobj
 
 config = configobj('api.conf')
 gs = goslate.Goslate()
+con = lite.connect('soup.sqlite')
+cur = con.cursor()
 # Get list of words for random queries
-with open('wordlist.txt') as words:
-	wordlist = words.read().splitlines()
+wordlist = []
+cur.execute('SELECT * FROM Words')
+words = cur.fetchall()
+for each in words:
+	wordlist.append(each[1])
 # Build list of languages accepted by goslate
-with open('languages.txt') as langlist:
-	langsplit = langlist.read().splitlines()
+cur.execute('SELECT * FROM Languages')
+languages = cur.fetchall()
 langs = {}
-for each in langsplit:
-	code = each.split(',')
-	langs[code[1]] = code[0]
+for each in languages:
+	langs[each[1]] = each[2]
 langs.pop('en')
 rand_lang = random.choice(list(langs.keys()))
 # Build a list of photos we have already used
-with open('photos.txt') as old:
-	old_photos = old.read().splitlines()
+cur.execute('SELECT * FROM old_photos')
+old_photos = cur.fetchall()
 photolist = {}
 for each in old_photos:
-	if each != '':
-		photolist[each] = 1
-# Gotta have a place to store photos
-if not os.path.exists('photos'):
-    os.makedirs('photos')
+	photolist[each[1]] = 1
 # List of words that don't make for good tags
+cur.execute('SELECT * FROM Bantags')
+banned = cur.fetchall()
 banned_tags = {}
-with open('banned.txt') as banned:
-	banned_list = banned.read().splitlines()
-for each in banned_list:
-	if each:
-		banned_tags[each] = 1
-		
-def get_photo(photodir): # Picks a random photo and grabs data to give to the script
-	rand_pic = random.choice(photodir)
-	archive = os.path.join('photos', rand_pic)
-	with open(archive) as pic:
-		url,source,title,attrib = pic.read().splitlines()
-	return rand_pic, archive, url, source, title, attrib
+for each in banned:
+	banned_tags[each[1]] = 1
+# List of users banned by me
+cur.execute('SELECT * FROM Banusers')
+banned = cur.fetchall()
+banned_users = {}
+for each in banned:
+	banned_users[each[1]] = 1
+# Clear out the holding table
+cur.execute('DELETE FROM Hold')
+con.commit()
+	
+def get_photo_list():
+	cur.execute('SELECT * FROM Photos')
+	photos = cur.fetchall()
+	photo_archive = {}
+	for each in photos:
+		db_id, photo_id, user, url, width, height, title, owner, lic = each
+		photo_archive[photo_id] = (url, width, height)
+	return photo_archive
+
+def get_photo(): # Picks a random photo and grabs data to give to the script.
+	photos = get_photo_list()
+	rand_pic = random.choice(list(photos.keys()))
+	url, width, height = photos[rand_pic]
+	return str(rand_pic), url, width, height
 
 def get_videos(): # Gets videos by scraping the youtube search page for links
 	rand_word = random.choice(wordlist)
@@ -60,36 +77,29 @@ def get_photo_archive(): # Builds the photo archive
 	apikey = fconf['apikey']
 	apisecret = fconf['apisecret']
 	flickr = flickrapi.FlickrAPI(apikey, apisecret)
-	licenses = flickr.photos.licenses.getInfo()
-	lic_dict = {}
-	tagchoices = ['landscape', 'nature', 'space']
-	for each in licenses[0]:
-		lic_dict[each.get('id')] = each.get('url')
+	tagchoices = ['landscape', 'nature']
 	for each in range(1,30):
 		rand_word = random.choice(wordlist)	
 		photos = flickr.photos.search(text=rand_word, extras='url_l,url_o,path_alias,owner_name,license', license='2,4,7', safesearch='1', tags=random.choice(tagchoices), tag_mode='all', content_type='1')
 		for pic in photos[0]:
-			if pic.get('pathalias'):
+			cur.execute('SELECT EXISTS(SELECT * FROM Photos WHERE photo_id=?)', (pic.get('id'),))
+			pic_check = cur.fetchall()[0][0]
+			if pic.get('pathalias') and (pic_check == 0):
 				title = pic.get('title')
 				pic_id= pic.get('id')
-				owner_url = pic.get('pathalias')
+				user = pic.get('pathalias')
 				owner = pic.get('ownername')
 				if not pic.get('url_l'):
-					url = pic.get('url_o')+','+pic.get('width_o')+','+pic.get('height_o')
+					url = pic.get('url_o')
+					width = pic.get('width_o')
+					height = pic.get('height_o')
 				else:
-					url = pic.get('url_l')+','+pic.get('width_l')+','+pic.get('height_l')
-				img_page = ('https://www.flickr.com/photos/%s/%s' % (owner_url, pic_id))
-				pic_lic = pic.get('license')
-				if pic_lic == '2':
-					source = title+'\n'+owner+'--!--'+("https://www.flickr.com/photos/%s" % (owner_url))+'--!--CC BY-NC--!--'+lic_dict[pic_lic]
-				elif pic_lic == '4':
-					source = title+'\n'+owner+'--!--'+("https://www.flickr.com/photos/%s" % (owner_url))+'--!--CC BY--!--'+lic_dict[pic_lic]
-				elif pic_lic == '7':
-					source = title+'\n'+'NONE--!--'+owner+'--!--'+("https://www.flickr.com/photos/%s" % (owner_url))
-				with open('photos/'+pic_id, 'w') as myFile:
-					myFile.write(url+'\n')
-					myFile.write(img_page+'\n')
-					myFile.write(source)
+					url = pic.get('url_l')
+					width = pic.get('width_l')
+					height = pic.get('height_l')
+				license = int(pic.get('license'))
+				cur.execute('INSERT INTO Photos(photo_id, user, url, width, height, title, owner, license) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', (pic_id, user, url, width, height, title, owner, license))
+				con.commit()
 					
 def get_subs(yt_links):
 	has_subtitles = False
@@ -133,9 +143,18 @@ def clean_quote(text):
 		text += '.'
 	return text
 
+def hold_info(pic_id):
+	cur.execute('SELECT * FROM Photos WHERE photo_id=?', (pic_id,))
+	photo = cur.fetchone()[1:]
+	print(photo)
+	cur.execute('INSERT INTO Hold(photo_id, user, url, width, height, title, owner, license) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', (photo))
+	con.commit()
+	cur.execute('DELETE FROM Photos WHERE photo_id=?', (pic_id,))
+	con.commit()
+
 if __name__ == '__main__':
 	# If we don't have photos, get some photos
-	if not os.listdir('photos'):
+	if not get_photo_list():
 		get_photo_archive()
 	# Pick a video with subtitles to gather random text from
 	yt_links = get_videos()
@@ -176,18 +195,17 @@ if __name__ == '__main__':
 		tags = tags + each + ','
 	tags = tags + langs[rand_lang]
 	# Pick a random photo and make sure it is one we haven't used before
-	rand_pic, archive, url, source, title, attrib = get_photo(os.listdir('photos'))
+	rand_pic, url, width, height = get_photo()
 	newphoto = False
 	while not newphoto:
-		if os.listdir('photos') == []:
+		if not get_photo_list():
 			get_photo_archive()
 		elif (rand_pic in photolist):
-			cmd = 'rm '+archive
-			call(shlex.split(cmd))
-			rand_pic, archive, url, source, title, attrib = get_photo(os.listdir('photos'))
+			cur.execute('DELETE FROM Photos WHERE photo_id=?', (rand_pic,))
+			con.commit()
+			rand_pic, url, width, height = get_photo()
 		else:
 			newphoto = True
-	url, width, height = url.split(',')
 	# Download and add text to photo
 	urllib.request.urlretrieve(url, rand_pic+'.jpg')
 	width = str(int(width)-100)
@@ -196,11 +214,9 @@ if __name__ == '__main__':
 		caption:"%s"\
 		%s.jpg +swap -gravity center -composite final.jpg''' % (width, height, final_quote, rand_pic)
 	call(shlex.split(cmd))
-	# Add photo to list of used photos
-	with open('photos.txt', 'a') as photos:
-		photos.write(rand_pic+'\n')
 	# Create file to pass info to tumblr.py
+	hold_info(rand_pic)
 	with open('translate.out', 'w') as output:
-		output.write(source+'\n'+final_quote+'\n'+tags+'\n'+title+'\n'+attrib)
+		output.write(final_quote+'\n'+tags)
 	# Clean up after myself
 	cleanup()
