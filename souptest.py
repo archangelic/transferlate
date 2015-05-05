@@ -146,7 +146,6 @@ def clean_quote(text):
 def hold_info(pic_id):
 	cur.execute('SELECT * FROM Photos WHERE photo_id=?', (pic_id,))
 	photo = cur.fetchone()[1:]
-	print(photo)
 	cur.execute('INSERT INTO Hold(photo_id, user, url, width, height, title, owner, license) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', (photo))
 	con.commit()
 	cur.execute('DELETE FROM Photos WHERE photo_id=?', (pic_id,))
