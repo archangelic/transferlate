@@ -84,7 +84,7 @@ def get_photo_archive(): # Builds the photo archive
 		for pic in photos[0]:
 			cur.execute('SELECT EXISTS(SELECT * FROM Photos WHERE photo_id=?)', (pic.get('id'),))
 			pic_check = cur.fetchall()[0][0]
-			if pic.get('pathalias') and (pic_check == 0):
+			if pic.get('pathalias') and (pic_check == 0) and (pic.get('pathalias') not in banned_users):
 				title = pic.get('title')
 				pic_id= pic.get('id')
 				user = pic.get('pathalias')
@@ -150,33 +150,15 @@ def hold_info(pic_id):
 	con.commit()
 	cur.execute('DELETE FROM Photos WHERE photo_id=?', (pic_id,))
 	con.commit()
+	
+def translate_text(quote):
+	translation = gs.translate(quote, rand_lang).encode('utf-8')
+	retranslate = gs.translate(translation, 'en')
+	final_quote = clean_quote(retranslate)
+	return final_quote
 
-if __name__ == '__main__':
-	# If we don't have photos, get some photos
-	if not get_photo_list():
-		get_photo_archive()
-	# Pick a video with subtitles to gather random text from
-	yt_links = get_videos()
-	subs = get_subs(yt_links)
-	# Time to pick our text from the subs and make sure the translated string is long enough
-	long_enough = False
-	x = 0
-	while not long_enough:
-		if x == 10:
-			cleanup()
-			yt_links = get_videos()
-			subs = get_subs(yt_links)
-			x = 0
-		rand_section = random.choice(subs)
-		rand_quote = rand_section.text.replace('\n', ' ')
-		translation = gs.translate(rand_quote, rand_lang).encode('utf-8')
-		retranslate = gs.translate(translation, 'en')
-		final_quote = clean_quote(retranslate)
-		if (len(final_quote.split()) > 6) and (len(final_quote.split()) < 15):
-			long_enough = True
-		x += 1
-	# Make some tags! Gotta promote through randomness!
-	tags_split = final_quote.split()
+def make_tags(quote):
+	tags_split = quote.split()
 	tags_select = []
 	for each in tags_split:
 		i = each.strip().strip(".!?@#$%^&*()-_=+,<>/;:'[]{}`~").lower()
@@ -193,13 +175,53 @@ if __name__ == '__main__':
 	for each in taglist:
 		tags = tags + each + ','
 	tags = tags + langs[rand_lang]
+	return tags
+
+def sub_translate(subs):
+	long_enough = False
+	x = 0
+	while not long_enough:
+		if x == 10:
+			cleanup()
+			yt_links = get_videos()
+			subs = get_subs(yt_links)
+			x = 0
+		rand_section = random.choice(subs)
+		rand_quote = rand_section.text.replace('\n', ' ')
+		translation = gs.translate(rand_quote, rand_lang).encode('utf-8')
+		retranslate = gs.translate(translation, 'en')
+		final_quote = clean_quote(retranslate)
+		if (len(final_quote.split()) > 6) and (len(final_quote.split()) < 15):
+			long_enough = True
+		x += 1
+	return final_quote
+
+def create_image(quote, pic_name, width, height):
+	width = str(int(width)-100)
+	height = str(int(height)-100)
+	cmd = '''convert -background none -gravity center -font Helvetica -fill white -stroke black -strokewidth 2 -size %sx%s\
+		caption:"%s"\
+		%s.jpg +swap -gravity center -composite final.jpg''' % (width, height, final_quote, pic_name)
+	call(shlex.split(cmd))
+
+if __name__ == '__main__':
+	# If we don't have photos, get some photos
+	if not get_photo_list():
+		get_photo_archive()
+	# Pick a video with subtitles to gather random text from
+	yt_links = get_videos()
+	subs = get_subs(yt_links)
+	# Time to pick our text from the subs and make sure the translated string is long enough
+	final_quote = sub_translate(subs)
+	# Make some tags! Gotta promote through randomness!
+	tags = make_tags(final_quote)
 	# Pick a random photo and make sure it is one we haven't used before
 	rand_pic, url, width, height = get_photo()
 	newphoto = False
 	while not newphoto:
 		if not get_photo_list():
 			get_photo_archive()
-		elif (rand_pic in photolist):
+		elif rand_pic in photolist:
 			cur.execute('DELETE FROM Photos WHERE photo_id=?', (rand_pic,))
 			con.commit()
 			rand_pic, url, width, height = get_photo()
@@ -207,12 +229,7 @@ if __name__ == '__main__':
 			newphoto = True
 	# Download and add text to photo
 	urllib.request.urlretrieve(url, rand_pic+'.jpg')
-	width = str(int(width)-100)
-	height = str(int(height)-100)
-	cmd = '''convert -background none -gravity center -font Helvetica -fill white -stroke black -strokewidth 2 -size %sx%s\
-		caption:"%s"\
-		%s.jpg +swap -gravity center -composite final.jpg''' % (width, height, final_quote, rand_pic)
-	call(shlex.split(cmd))
+	create_image(final_quote, rand_pic, width, height)
 	# Create file to pass info to tumblr.py
 	hold_info(rand_pic)
 	with open('translate.out', 'w') as output:
