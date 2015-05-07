@@ -28,6 +28,7 @@ if
 in
 is
 it
+it's
 like
 me
 my
@@ -52,6 +53,7 @@ thing
 things
 this
 to
+too
 us
 want 
 was
