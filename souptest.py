@@ -4,12 +4,28 @@ import random, shlex, os, pysrt, goslate, flickrapi
 import sqlite3 as lite
 from bs4 import BeautifulSoup
 from subprocess import call
+from tumblpy import Tumblpy
 from configobj import ConfigObj as configobj
 
 config = configobj('api.conf')
 gs = goslate.Goslate()
 con = lite.connect('soup.sqlite')
 cur = con.cursor()
+
+tconf = config['tumblr']
+consumer_key = tconf['consumer_key']
+consumer_secret = tconf['consumer_secret']
+oauth_token = tconf['oauth_token']
+oauth_secret = tconf['oauth_secret']
+blog = tconf['blog_host']
+
+client = Tumblpy(
+	consumer_key, 
+	consumer_secret, 
+	oauth_token, 
+	oauth_secret
+)
+
 # Get list of words for random queries
 wordlist = []
 cur.execute('SELECT * FROM Words')
@@ -104,7 +120,7 @@ def get_photo_archive(): # Builds the photo archive
 def get_subs(yt_links):
 	has_subtitles = False
 	while not has_subtitles:
-		if yt_links != {}:
+		if yt_links:
 			chosen_key = random.choice(list(yt_links.keys()))
 			chosen_one = yt_links[chosen_key]
 			command = ('/usr/local/bin/youtube-dl -q --no-warnings --no-playlist --write-sub --write-auto-sub --sub-lang "en" --skip-download "%s" --restrict-filenames' % (chosen_one,))
@@ -143,10 +159,8 @@ def clean_quote(text):
 		text += '.'
 	return text
 
-def hold_info(pic_id):
-	cur.execute('SELECT * FROM Photos WHERE photo_id=?', (pic_id,))
-	photo = cur.fetchone()[1:]
-	cur.execute('INSERT INTO Hold(photo_id, user, url, width, height, title, owner, license) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', (photo))
+def clear_photo(pic_id):
+	cur.execute('INSERT INTO old_photos(id) VALUES(?)', (pic_id,))
 	con.commit()
 	cur.execute('DELETE FROM Photos WHERE photo_id=?', (pic_id,))
 	con.commit()
@@ -201,10 +215,30 @@ def create_image(quote, pic_name, width, height):
 	height = str(int(height)-100)
 	cmd = '''convert -background none -gravity center -font Helvetica -fill white -stroke black -strokewidth 2 -size %sx%s\
 		caption:"%s"\
-		%s.jpg +swap -gravity center -composite final.jpg''' % (width, height, final_quote, pic_name)
+		%s.jpg +swap -gravity center -composite final.jpg''' % (width, height, quote, pic_name)
 	call(shlex.split(cmd))
+	
+def build_caption(photo, quote):
+	photo_id, user, pic_url, width, height, title, owner, license = photo
+	cur.execute('SELECT * FROM Licenses WHERE lic_id=?', (license,))
+	lic,lic_url = cur.fetchone()[2:]
+	profile = 'https://www.flickr.com/photos/'+user
+	flickr = 'https://www.flickr.com/'+user+'/'+str(photo_id)
+	if lic == 'NONE':
+		caption = """>`%s`
 
-if __name__ == '__main__':
+Photo: [%s](%s) from [%s](%s)""" % (quote,title,flickr,owner,profile)
+	else:
+		caption = """>`%s`
+
+Photo: [%s](%s) by [%s](%s) licensed under [%s](%s)""" % (quote,title,flickr,owner,profile,lic,lic_url)
+	return caption, flickr
+
+def tumblr_post(pic, caption, pictags=None, flickr=None):
+	picdata = open(pic, 'rb')
+	client.post('post', blog_url=blog, params={'state':'queue', 'type':'photo', 'tags':pictags, 'format':'markdown', 'caption':caption, 'data':picdata, 'link':flickr })
+
+def main():
 	# If we don't have photos, get some photos
 	if not get_photo_list():
 		get_photo_archive()
@@ -230,9 +264,14 @@ if __name__ == '__main__':
 	# Download and add text to photo
 	urllib.request.urlretrieve(url, rand_pic+'.jpg')
 	create_image(final_quote, rand_pic, width, height)
-	# Create file to pass info to tumblr.py
-	hold_info(rand_pic)
-	with open('translate.out', 'w') as output:
-		output.write(final_quote+'\n'+tags)
+	# Build info for tumblr
+	cur.execute('SELECT * FROM Photos WHERE photo_id=?', (rand_pic,))
+	photo = cur.fetchone()[1:]
+	caption,link = build_caption(photo, final_quote)
+	tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
 	# Clean up after myself
+	clear_photo(rand_pic)
 	cleanup()
+
+if __name__ == '__main__':
+	main()
