@@ -58,9 +58,6 @@ banned = cur.fetchall()
 banned_users = {}
 for each in banned:
 	banned_users[each[1]] = 1
-# Clear out the holding table
-cur.execute('DELETE FROM Hold')
-con.commit()
 	
 def get_photo_list():
 	cur.execute('SELECT * FROM Photos')
@@ -141,7 +138,7 @@ def cleanup():
 		if each.endswith('.srt'):
 			cmd = 'rm "'+each+'"'
 			call(shlex.split(cmd))
-		if each.endswith('.jpg') and (each != 'final.jpg'):
+		if each.endswith('.jpg'):
 			cmd = 'rm "'+each+'"'
 			call(shlex.split(cmd))
 
@@ -160,7 +157,7 @@ def clean_quote(text):
 	return text
 
 def clear_photo(pic_id):
-	cur.execute('INSERT INTO old_photos(id) VALUES(?)', (pic_id,))
+	cur.execute('INSERT INTO old_photos(photo) VALUES(?)', (pic_id,))
 	con.commit()
 	cur.execute('DELETE FROM Photos WHERE photo_id=?', (pic_id,))
 	con.commit()

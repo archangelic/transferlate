@@ -15,7 +15,6 @@ con = lite.connect('soup.sqlite')
 cur = con.cursor()
 
 cur.execute('CREATE TABLE IF NOT EXISTS Photos(Id INTEGER PRIMARY KEY, photo_id INTEGER, user TEXT, url TEXT, width INTEGER, height INTEGER, title TEXT, owner TEXT, license INTEGER)')
-cur.execute('CREATE TABLE IF NOT EXISTS Hold(Id INTEGER PRIMARY KEY, photo_id INTEGER, user TEXT, url TEXT, width INTEGER, height INTEGER, title TEXT, owner TEXT, license INTEGER)')
 cur.execute('CREATE TABLE IF NOT EXISTS Licenses(Id INTEGER PRIMARY KEY, lic_id INTEGER, name TEXT, url TEXT)')
 cur.execute('CREATE TABLE IF NOT EXISTS Bantags(Id INTEGER PRIMARY KEY, tag TEXT)')
 cur.execute('CREATE TABLE IF NOT EXISTS Banusers(Id INTEGER PRIMARY KEY, user TEXT)')
