@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import urllib.request, urllib.error, urllib.parse
-import random, shlex, os, pysrt, goslate, flickrapi
+import random, shlex, os, pysrt, goslate, flickrapi, logging, logging.handlers
 import sqlite3 as lite
 from bs4 import BeautifulSoup
 from subprocess import call
@@ -212,7 +212,7 @@ def create_image(quote, pic_name, width, height):
 	height = str(int(height)-100)
 	cmd = '''convert -background none -gravity center -font Helvetica -fill white -stroke black -strokewidth 2 -size %sx%s\
 		caption:"%s"\
-		%s.jpg +swap -gravity center -composite final.jpg''' % (width, height, quote, pic_name)
+		%s +swap -gravity center -composite final.jpg''' % (width, height, quote, pic_name)
 	call(shlex.split(cmd))
 	
 def build_caption(photo, quote):
@@ -236,6 +236,14 @@ def tumblr_post(pic, caption, pictags=None, flickr=None):
 	client.post('post', blog_url=blog, params={'state':'queue', 'type':'photo', 'tags':pictags, 'format':'markdown', 'caption':caption, 'data':picdata, 'link':flickr })
 
 def main():
+	logger = logging.getLogger('souptest')
+	logger.setLevel(logging.DEBUG)
+	logger.propagate = False
+	fhandler = logging.handlers.RotatingFileHandler(blog.split('/')[2]+'.log', maxBytes=200000, backupCount=5)
+	fhandler.setLevel(logging.DEBUG)
+	formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+	fhandler.setFormatter(formatter)
+	logger.addHandler(fhandler)
 	# If we don't have photos, get some photos
 	if not get_photo_list():
 		get_photo_archive()
@@ -260,12 +268,14 @@ def main():
 			newphoto = True
 	# Download and add text to photo
 	urllib.request.urlretrieve(url, rand_pic+'.jpg')
-	create_image(final_quote, rand_pic, width, height)
+	create_image(final_quote, rand_pic+'.jpg', width, height)
 	# Build info for tumblr
 	cur.execute('SELECT * FROM Photos WHERE photo_id=?', (rand_pic,))
 	photo = cur.fetchone()[1:]
 	caption,link = build_caption(photo, final_quote)
 	tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
+	logger.info('Quote: '+final_quote)
+	logger.info('Image: '+link)
 	# Clean up after myself
 	clear_photo(rand_pic)
 	cleanup()
