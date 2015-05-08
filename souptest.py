@@ -231,9 +231,14 @@ Photo: [%s](%s) from [%s](%s)""" % (quote,title,flickr,owner,profile)
 Photo: [%s](%s) by [%s](%s) licensed under [%s](%s)""" % (quote,title,flickr,owner,profile,lic,lic_url)
 	return caption, flickr
 
-def tumblr_post(pic, caption, pictags=None, flickr=None):
+def tumblr_post(pic, caption, pictags=None, flickr=None, state='queue', tformat='markdown'):
 	picdata = open(pic, 'rb')
-	client.post('post', blog_url=blog, params={'state':'queue', 'type':'photo', 'tags':pictags, 'format':'markdown', 'caption':caption, 'data':picdata, 'link':flickr })
+	tparams={'state':state, 'type':'photo', 'format':tformat, 'caption':caption, 'data':picdata}
+	if pictags:
+		tparams['tags'] = pictags
+	if flickr:
+		tparams['link'] = flickr
+	client.post('post', blog_url=blog, params=tparams)
 
 def main():
 	logger = logging.getLogger('souptest')
