@@ -19,6 +19,11 @@ oauth_token = tconf['oauth_token']
 oauth_secret = tconf['oauth_secret']
 blog = tconf['blog_host']
 
+fconf = config['flickr']
+apikey = fconf['apikey']
+apisecret = fconf['apisecret']
+flickr = flickrapi.FlickrAPI(apikey, apisecret)
+
 client = Tumblpy(
 	consumer_key, 
 	consumer_secret, 
@@ -64,23 +69,98 @@ run_id = ''.join(random.choice(string.ascii_lowercase+string.digits) for i in ra
 logger = logging.getLogger('souptest')
 logger.setLevel(logging.DEBUG)
 logger.propagate = False
-fhandler = logging.handlers.RotatingFileHandler(blog.split('/')[2]+'.log', maxBytes=200000, backupCount=5)
+fhandler = logging.handlers.RotatingFileHandler(blog.split('/')[2]+'.log', maxBytes=1000000, backupCount=5)
 fhandler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - '+run_id+' - %(message)s')
 fhandler.setFormatter(formatter)
 logger.addHandler(fhandler)
 
-logger.info("Global random language: "+langs[rand_lang])
+def build_caption(photo, quote):
+	logger.info("Building caption for Tumblr")
+	photo_id, user, pic_url, width, height, title, owner, license, tags = photo
+	cur.execute('SELECT * FROM Licenses WHERE lic_id=?', (license,))
+	lic,lic_url = cur.fetchone()[2:]
+	profile = 'https://www.flickr.com/photos/'+user
+	flickr = 'https://www.flickr.com/'+user+'/'+str(photo_id)
+	if lic == 'NONE':
+		caption = """>`%s`
+
+Photo: [%s](%s) from [%s](%s)""" % (quote,title,flickr,owner,profile)
+	else:
+		caption = """>`%s`
+
+Photo: [%s](%s) by [%s](%s) licensed under [%s](%s)""" % (quote,title,flickr,owner,profile,lic,lic_url)
+	return caption, flickr
+
+def clean_quote(text):
+	text_trails = True
+	puncs = [".", "\\!", "?", "..."]
+	while text_trails:
+		text = text.strip().strip("@#$%^&*()-_=+,<>/;:'[]{}`~")
+		if text.strip('.?!').endswith((' and', ' an', ' the', ' but', ' or', ' nor', ' a')):
+			trail_len = len(text.split()[-1])
+			text = text[:-trail_len]
+		else:
+			text_trails = False
+	text = text.replace('"', '\\"')
+	text = text.replace("!", "\\!")
+	text = text[0].upper()+text[1:]
+	if not text.endswith(('.','!','?','"')):
+		text += random.choice(puncs)
+	elif text.endswith('"') and not text.endswith(('.\"', '\!\"', '?\"')):
+		text = text[:-1] + random.choice(puncs) + '\\"'
+	return text
+
+def cleanup():
+	for each in os.listdir('.'):
+		if each.endswith('.srt'):
+			logger.info("Removing: "+each)
+			os.remove(each)
+		if each.endswith('.jpg'):
+			logger.info("Removing: "+each)
+			os.remove(each)
+
+def clear_photo(pic_id):
+	logger.info("Adding photo to old_photos: " + pic_id)
+	cur.execute('INSERT INTO old_photos(photo) VALUES(?)', (pic_id,))
+	con.commit()
+	cur.execute('DELETE FROM Photos WHERE photo_id=?', (pic_id,))
+	con.commit()
 	
-def get_photo_list():
-	logger.info('Building photo list')
-	cur.execute('SELECT * FROM Photos')
-	photos = cur.fetchall()
-	photo_archive = {}
-	for each in photos:
-		db_id, photo_id, user, url, width, height, title, owner, lic, tags = each
-		photo_archive[photo_id] = (url, width, height)
-	return photo_archive
+def create_image(quote, pic_name, width, height):
+	width = str(int(width)-100)
+	height = str(int(height)-100)
+	cmd = '''convert -background none -gravity center -font Helvetica -fill white -stroke black -strokewidth 2 -size %sx%s\
+		caption:"%s"\
+		%s +swap -gravity center -composite final.jpg''' % (width, height, quote, pic_name)
+	call(shlex.split(cmd))
+	logger.info("Created overlayed text image")
+
+def flickr_tags(photo):
+	phid, user, url, width, height, title, owner, lic, tagsraw = photo
+	picinfo = flickr.photos.getInfo(photo_id=phid)
+	newtags = []
+	for each in picinfo[0][11]:
+		newtags.append(each.get('raw'))
+	logger.info("Creating tags from Flickr tags: "+ url)
+	tags_select = []
+	for each in newtags:
+		i = each.strip().strip(".!?@#$%^&*()-_=+,<>/;:'[]{}`~").strip('"').lower()
+		if i:
+			tags_select.append(i)
+	tagdict = {}
+	taglist = []
+	for i in range(1,100):
+		tag = random.choice(tags_select)
+		if (tag not in tagdict) and (tag not in banned_tags) and (len(taglist) < 5):
+			tagdict[tag] = 1
+			taglist.append(tag)
+	tags = ''
+	for each in taglist:
+		tags = tags + each + ','
+	tags = tags + ',' + run_id
+	logger.info("Tags: "+tags)
+	return tags
 
 def get_photo(): # Picks a random photo and grabs data to give to the script.
 	photos = get_photo_list()
@@ -89,26 +169,10 @@ def get_photo(): # Picks a random photo and grabs data to give to the script.
 	logger.info("Photo chosen: "+url)
 	return str(rand_pic), url, width, height
 
-def get_videos(): # Gets videos by scraping the youtube search page for links
-	logger.info("Getting list of YouTube videos")
-	rand_word = random.choice(wordlist)
-	results = urllib.request.urlopen('https://www.youtube.com/results?search_query='+rand_word).read()
-	soup = BeautifulSoup(results)
-	yt_links = {}
-	for link in soup.find_all('a'):
-		x = link.get('href')
-		if x.startswith('/watch?') and x not in yt_links:
-			yt_links[x] = 'https://www.youtube.com'+x
-	return yt_links
-
-def get_photo_archive(): # Builds the photo archive
+def get_photo_archive(counter=30): # Builds the photo archive
 	logger.info("Building photo archive")
-	fconf = config['flickr']
-	apikey = fconf['apikey']
-	apisecret = fconf['apisecret']
-	flickr = flickrapi.FlickrAPI(apikey, apisecret)
 	tagchoices = ['landscape', 'nature']
-	for each in range(1,30):
+	for each in range(1,counter):
 		rand_word = random.choice(wordlist)	
 		photos = flickr.photos.search(text=rand_word, extras='url_l,url_o,path_alias,owner_name,license,tags', license='2,4,7', safesearch='1', tags=random.choice(tagchoices), tag_mode='all', content_type='1')
 		for pic in photos[0]:
@@ -131,8 +195,17 @@ def get_photo_archive(): # Builds the photo archive
 				license = int(pic.get('license'))
 				cur.execute('INSERT INTO Photos(photo_id, user, url, width, height, title, owner, license, tags) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)', (pic_id, user, url, width, height, title, owner, license, tags))
 				con.commit()
-				logger.info('New photo: '+pic_id)
-					
+	
+def get_photo_list():
+	logger.info('Building photo list')
+	cur.execute('SELECT * FROM Photos')
+	photos = cur.fetchall()
+	photo_archive = {}
+	for each in photos:
+		db_id, photo_id, user, url, width, height, title, owner, lic, tags = each
+		photo_archive[photo_id] = (url, width, height)
+	return photo_archive.
+	
 def get_subs(yt_links):
 	has_subtitles = False
 	while not has_subtitles:
@@ -153,89 +226,38 @@ def get_subs(yt_links):
 			yt_links = get_videos()
 	return subs
 
-def cleanup():
-	for each in os.listdir('.'):
-		if each.endswith('.srt'):
-			logger.info("Removing: "+each)
-			cmd = 'rm "'+each+'"'
-			call(shlex.split(cmd))
-		if each.endswith('.jpg'):
-			logger.info("Removing: "+each)
-			cmd = 'rm "'+each+'"'
-			call(shlex.split(cmd))
-
-def clean_quote(text):
-	text_trails = True
-	while text_trails:
-		text = text.strip().strip("@#$%^&*()-_=+,<>/;:'[]{}`~")
-		if text.strip('.?!').endswith((' and', ' an', ' the', ' but', ' or', ' nor', ' a')):
-			trail_len = len(text.split()[-1])
-			text = text[:-trail_len]
-		else:
-			text_trails = False
-	text = text[0].upper()+text[1:]
-	if not text.endswith(('.','!','?')):
-		text += '.'
-	return text
-
-def clear_photo(pic_id):
-	logger.info("Adding photo to old_photos: " + pic_id)
-	cur.execute('INSERT INTO old_photos(photo) VALUES(?)', (pic_id,))
-	con.commit()
-	cur.execute('DELETE FROM Photos WHERE photo_id=?', (pic_id,))
-	con.commit()
-	
-def translate_text(quote):
-	logger.info("Translating given text: " + quote)
-	translation = gs.translate(quote, rand_lang).encode('utf-8')
-	retranslate = gs.translate(translation, 'en')
-	final_quote = clean_quote(retranslate)
-	logger.info("Translated: "+ final_quote)
-	return final_quote
+def get_videos(): # Gets videos by scraping the youtube search page for links
+	logger.info("Getting list of YouTube videos")
+	rand_word = random.choice(wordlist)
+	results = urllib.request.urlopen('https://www.youtube.com/results?search_query='+rand_word).read()
+	soup = BeautifulSoup(results)
+	yt_links = {}
+	for link in soup.find_all('a'):
+		x = link.get('href')
+		if x.startswith('/watch?') and x not in yt_links:
+			yt_links[x] = 'https://www.youtube.com'+x
+	return yt_links
 
 def make_tags(quote):
 	logger.info("Creating tags from quote: " + quote)
 	tags_split = quote.split()
 	tags_select = []
 	for each in tags_split:
-		i = each.strip().strip(".!?@#$%^&*()-_=+,<>/;:'[]{}`~").lower()
+		i = each.strip().strip(".!?@#$%^&*()-_=+,<>/;:'[]{}`~").strip('"').lower()
 		if i:
 			tags_select.append(i)
 	tagdict = {}
 	taglist = []
 	for i in range(1,100):
 		tag = random.choice(tags_select)
-		if (tag not in tagdict) and (tag not in banned_tags) and (len(taglist) < 4):
+		if (tag not in tagdict) and (tag not in banned_tags) and (len(taglist) < 5):
 			tagdict[tag] = 1
 			taglist.append(tag)
 	tags = ''
 	for each in taglist:
 		tags = tags + each + ','
-	tags = tags + langs[rand_lang] + ',' + run_id
+	tags = tags + run_id
 	logger.info("Tags: " + tags)
-	return tags
-
-def flickr_tags(photo):
-	photo_id, user, url, width, height, title, owner, lic, tagsraw = photo
-	logger.info("Creating tags from Flickr tags: "+ url)
-	tags_split = tagsraw.split(',')
-	tags_select = []
-	for each in tags_split:
-		i = each.strip().strip(".!?@#$%^&*()-_=+,<>/;:'[]{}`~").lower()
-		if i:
-			tags_select.append(i)
-	tagdict = {}
-	taglist = []
-	for i in range(1,100):
-		tag = random.choice(tags_select)
-		if (tag not in tagdict) and (tag not in banned_tags) and (len(taglist) < 4):
-			tagdict[tag] = 1
-			taglist.append(tag)
-	tags = ''
-	for each in taglist:
-		tags = tags + each + ','
-	tags = tags + langs[rand_lang] + ',' + run_id
-	logger.info("Tags: "+tags)
 	return tags
 
 def sub_translate(subs):
@@ -250,7 +272,7 @@ def sub_translate(subs):
 			x = 0
 		rand_section = random.choice(subs)
 		rand_quote = rand_section.text.replace('\n', ' ')
-		translation = gs.translate(rand_quote, rand_lang).encode('utf-8')
+		translation = gs.translate(str(rand_quote), rand_lang).encode('utf-8')
 		retranslate = gs.translate(translation, 'en')
 		final_quote = clean_quote(retranslate)
 		if (len(final_quote.split()) > 6) and (len(final_quote.split()) < 15):
@@ -261,31 +283,13 @@ def sub_translate(subs):
 	logger.info("Translated: "+final_quote)
 	return final_quote
 
-def create_image(quote, pic_name, width, height):
-	width = str(int(width)-100)
-	height = str(int(height)-100)
-	cmd = '''convert -background none -gravity center -font Helvetica -fill white -stroke black -strokewidth 2 -size %sx%s\
-		caption:"%s"\
-		%s +swap -gravity center -composite final.jpg''' % (width, height, quote, pic_name)
-	call(shlex.split(cmd))
-	logger.info("Created overlayed text image")
-	
-def build_caption(photo, quote):
-	logger.info("Building caption for Tumblr")
-	photo_id, user, pic_url, width, height, title, owner, license, tags = photo
-	cur.execute('SELECT * FROM Licenses WHERE lic_id=?', (license,))
-	lic,lic_url = cur.fetchone()[2:]
-	profile = 'https://www.flickr.com/photos/'+user
-	flickr = 'https://www.flickr.com/'+user+'/'+str(photo_id)
-	if lic == 'NONE':
-		caption = """>`%s`
-
-Photo: [%s](%s) from [%s](%s)""" % (quote,title,flickr,owner,profile)
-	else:
-		caption = """>`%s`
-
-Photo: [%s](%s) by [%s](%s) licensed under [%s](%s)""" % (quote,title,flickr,owner,profile,lic,lic_url)
-	return caption, flickr
+def translate_text(quote):
+	logger.info("Translating given text: " + quote)
+	translation = gs.translate(quote, rand_lang).encode('utf-8')
+	retranslate = gs.translate(translation, 'en')
+	final_quote = clean_quote(retranslate)
+	logger.info("Translated: "+ final_quote)
+	return final_quote
 
 def tumblr_post(pic, caption, pictags=None, flickr=None, state='queue', tformat='markdown'):
 	logger.info("Posting to Tumblr")
@@ -298,6 +302,7 @@ def tumblr_post(pic, caption, pictags=None, flickr=None, state='queue', tformat=
 	client.post('post', blog_url=blog, params=tparams)
 
 def main():
+	logger.info("Global random language: "+langs[rand_lang])
 	# If we don't have photos, get some photos
 	if not get_photo_list():
 		get_photo_archive()
