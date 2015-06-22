@@ -1,6 +1,5 @@
 #!/usr/bin/python3
-import urllib.request, urllib.error, urllib.parse
-import random, shlex, os, pysrt, goslate, flickrapi, logging, logging.handlers, string
+import random, shlex, os, pysrt, goslate, flickrapi, logging, logging.handlers, string, urllib.request
 import sqlite3 as lite
 from bs4 import BeautifulSoup
 from subprocess import call
@@ -18,6 +17,8 @@ consumer_secret = tconf['consumer_secret']
 oauth_token = tconf['oauth_token']
 oauth_secret = tconf['oauth_secret']
 blog = tconf['blog_host']
+if not blog.startswith('http://'):
+	blog = blog + 'http://'
 
 fconf = config['flickr']
 apikey = fconf['apikey']
@@ -75,22 +76,31 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - '+run_id
 fhandler.setFormatter(formatter)
 logger.addHandler(fhandler)
 
-def build_caption(photo, quote):
+def build_caption(photo, quote, ptype="flickr", puser=""):
 	logger.info("Building caption for Tumblr")
-	photo_id, user, pic_url, width, height, title, owner, license, tags = photo
-	cur.execute('SELECT * FROM Licenses WHERE lic_id=?', (license,))
-	lic,lic_url = cur.fetchone()[2:]
-	profile = 'https://www.flickr.com/photos/'+user
-	flickr = 'https://www.flickr.com/'+user+'/'+str(photo_id)
-	if lic == 'NONE':
+	if photo:
+		photo_id, user, pic_url, width, height, title, owner, license, tags = photo
+		cur.execute('SELECT * FROM Licenses WHERE lic_id=?', (license,))
+		lic,lic_url = cur.fetchone()[2:]
+		profile = 'https://www.flickr.com/photos/'+user
+		flickr = 'https://www.flickr.com/'+user+'/'+str(photo_id)
+	else:
+		lic = None
+	if lic == 'NONE' and ptype == "flickr":
 		caption = """>`%s`
 
 Photo: [%s](%s) from [%s](%s)""" % (quote,title,flickr,owner,profile)
-	else:
+		return caption, flickr
+	elif ptype == "flickr":
 		caption = """>`%s`
 
 Photo: [%s](%s) by [%s](%s) licensed under [%s](%s)""" % (quote,title,flickr,owner,profile,lic,lic_url)
-	return caption, flickr
+		return caption, flickr
+	if ptype != "flickr":
+		caption = """>`%s`
+
+Photo submitted by %s""" % (quote, puser)
+		return caption
 
 def clean_quote(text):
 	text_trails = True
@@ -158,7 +168,7 @@ def flickr_tags(photo):
 	tags = ''
 	for each in taglist:
 		tags = tags + each + ','
-	tags = tags + ',' + run_id
+	tags = tags + run_id
 	logger.info("Tags: "+tags)
 	return tags
 
@@ -204,7 +214,7 @@ def get_photo_list():
 	for each in photos:
 		db_id, photo_id, user, url, width, height, title, owner, lic, tags = each
 		photo_archive[photo_id] = (url, width, height)
-	return photo_archive.
+	return photo_archive
 	
 def get_subs(yt_links):
 	has_subtitles = False
@@ -238,7 +248,7 @@ def get_videos(): # Gets videos by scraping the youtube search page for links
 			yt_links[x] = 'https://www.youtube.com'+x
 	return yt_links
 
-def make_tags(quote):
+def make_tags(quote, length=5):
 	logger.info("Creating tags from quote: " + quote)
 	tags_split = quote.split()
 	tags_select = []
@@ -250,7 +260,7 @@ def make_tags(quote):
 	taglist = []
 	for i in range(1,100):
 		tag = random.choice(tags_select)
-		if (tag not in tagdict) and (tag not in banned_tags) and (len(taglist) < 5):
+		if (tag not in tagdict) and (tag not in banned_tags) and (len(taglist) < length):
 			tagdict[tag] = 1
 			taglist.append(tag)
 	tags = ''
@@ -292,6 +302,7 @@ def translate_text(quote):
 	return final_quote
 
 def tumblr_post(pic, caption, pictags=None, flickr=None, state='queue', tformat='markdown'):
+	caption = caption.replace("\!", "!").replace('\"', '"')
 	logger.info("Posting to Tumblr")
 	picdata = open(pic, 'rb')
 	tparams={'state':state, 'type':'photo', 'format':tformat, 'caption':caption, 'data':picdata}
