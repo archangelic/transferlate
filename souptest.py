@@ -35,8 +35,8 @@ apisecret = fconf['apisecret']
 flickr = flickrapi.FlickrAPI(apikey, apisecret)
 
 logconf = config['log']
-maxBytes = logconf['maxBytes']
-backupCount = logconf['backupCount']
+maxBytes = int(logconf['maxBytes'])
+backupCount = int(logconf['backupCount'])
 
 client = Tumblpy(
     consumer_key,
@@ -428,4 +428,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except:
+        logger.exception()
+        cleanup()
