@@ -1,9 +1,9 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import os
 import flickrapi
 import sqlite3 as lite
-from configobj import ConfigObj as configobj
-config = configobj('api.conf')
+from configobj import ConfigObj
+config = ConfigObj('api.conf')
 
 fconf = config['flickr']
 apikey = fconf['apikey']

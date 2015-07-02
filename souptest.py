@@ -34,6 +34,10 @@ apikey = fconf['apikey']
 apisecret = fconf['apisecret']
 flickr = flickrapi.FlickrAPI(apikey, apisecret)
 
+logconf = config['log']
+maxBytes = logconf['maxBytes']
+backupCount = logconf['backupCount']
+
 client = Tumblpy(
     consumer_key,
     consumer_secret,
@@ -80,9 +84,11 @@ run_id = ''.join(random.choice(
 logger = logging.getLogger('souptest')
 logger.setLevel(logging.DEBUG)
 logger.propagate = False
-fhandler = logging.handlers.RotatingFileHandler(blog.split('/')[2]+'.log',
-                                                maxBytes=1000000,
-                                                backupCount=5)
+fhandler = logging.handlers.RotatingFileHandler(
+    os.path.join('logs', blog.split('/')[2]+'.log'),
+    maxBytes=maxBytes,
+    backupCount=backupCount
+)
 fhandler.setLevel(logging.DEBUG)
 formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - '+run_id+' - %(message)s')
@@ -122,7 +128,7 @@ Photo submitted by %s""" % (quote, puser)
 
 def clean_quote(text):
     text_trails = True
-    puncs = [".", "\\!", "?", "..."]
+    puncs = [".", ".", ".", "\\!", "?", "..."]
     trails = (' and', ' an', ' the', ' but', ' or', ' nor', ' a')
     while text_trails:
         text = text.strip().strip("@#$%^&*()-_=+,<>/;:'[]{}`~")
