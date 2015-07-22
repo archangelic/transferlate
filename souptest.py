@@ -372,7 +372,7 @@ def translate_text(quote):
 
 def tumblr_post(pic, caption, pictags=None,
                 flickr=None, state='queue', tformat='markdown'):
-    caption = caption.replace("\!", "!").replace('\"', '"')
+    caption = caption.replace("\\", "")
     logger.info("Posting to Tumblr")
     picdata = open(pic, 'rb')
     tparams = {
@@ -431,5 +431,5 @@ if __name__ == '__main__':
     try:
         main()
     except:
-        logger.exception()
+        logger.exception("An error occurred.")
         cleanup()
