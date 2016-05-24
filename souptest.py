@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import random
 import shlex
 import os
@@ -9,6 +9,7 @@ import logging
 import logging.handlers
 import string
 import urllib.request
+import tweepy
 import sqlite3 as lite
 from bs4 import BeautifulSoup
 from subprocess import call
@@ -44,6 +45,16 @@ client = Tumblpy(
     oauth_token,
     oauth_secret
 )
+
+twconf = config['twitter']
+tw_con_key = twconf['consumer_key']
+tw_con_secret = twconf['consumer_secret']
+tw_key = twconf['key']
+tw_secret = twconf['secret']
+tw_auth = tweepy.OAuthHandler(tw_con_key, tw_con_secret)
+tw_auth.set_access_token(tw_key, tw_secret)
+tw = tweepy.API(tw_auth)
+
 
 # Get list of words for random queries
 wordlist = []
@@ -119,11 +130,14 @@ Photo: [%s](%s) by [%s](%s) licensed under [%s](%s)""" % (quote, title, flickr,
                                                           owner, profile, lic,
                                                           lic_url)
         return caption, flickr
-    if ptype != "flickr":
+    if ptype == "submit":
         caption = """>`%s`
 
 Photo submitted by %s""" % (quote, puser)
         return caption
+    if ptype == "quote":
+        caption = ">`%s`" % (quote)
+        return caption, flickr
 
 
 def clean_quote(text):
@@ -222,39 +236,39 @@ def get_photo_archive(counter=30):  # Builds the photo archive
         photos = flickr.photos.search(
             text=rand_word,
             extras='url_l,url_o,path_alias,owner_name,license,tags',
-            license='2,4,7',
+            license='7',
             safesearch='1',
             tags=random.choice(tagchoices), tag_mode='all', content_type='1')
         for pic in photos[0]:
             cur.execute('SELECT EXISTS(SELECT * FROM Photos WHERE photo_id=?)',
                         (pic.get('id'),))
             pic_check = cur.fetchall()[0][0]
-        if (
-            pic.get('pathalias') and
-            (pic_check == 0) and
-            (pic.get('pathalias') not in banned_users)
-        ):
-            title = pic.get('title')
-            pic_id = pic.get('id')
-            user = pic.get('pathalias')
-            owner = pic.get('ownername')
-            if not pic.get('url_l'):
-                url = pic.get('url_o')
-                width = pic.get('width_o')
-                height = pic.get('height_o')
-            else:
-                url = pic.get('url_l')
-                width = pic.get('width_l')
-                height = pic.get('height_l')
-            tags = pic.get('tags').replace(' ', ',')
-            license = int(pic.get('license'))
-            cur.execute("""
-            INSERT INTO Photos(photo_id, user, url, width, height, title,
-            owner, license, tags)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (pic_id, user, url, width, height, title, owner,
-                         license, tags))
-            con.commit()
+            if (
+                pic.get('pathalias') and
+                (pic_check == 0) and
+                (pic.get('pathalias') not in banned_users)
+            ):
+                title = pic.get('title')
+                pic_id = pic.get('id')
+                user = pic.get('pathalias')
+                owner = pic.get('ownername')
+                if not pic.get('url_l'):
+                    url = pic.get('url_o')
+                    width = pic.get('width_o')
+                    height = pic.get('height_o')
+                else:
+                    url = pic.get('url_l')
+                    width = pic.get('width_l')
+                    height = pic.get('height_l')
+                tags = pic.get('tags').replace(' ', ',')
+                license = int(pic.get('license'))
+                cur.execute("""
+                INSERT INTO Photos(photo_id, user, url, width, height, title,
+                owner, license, tags)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (pic_id, user, url, width, height, title, owner,
+                             license, tags))
+                con.commit()
 
 
 def get_photo_list():
@@ -411,7 +425,12 @@ def tumblr_post(pic, caption, pictags=None,
         tparams['link'] = flickr
     client.post('post', blog_url=blog, params=tparams)
 
-
+def twitter_post(pic, caption):
+    caption = caption.replace("\\", "").strip(">").strip("`")
+    logger.info("Posting to twitter")
+    tw.update_with_media(pic, status=caption)
+    
+    
 def main():
     logger.info("Global random language: "+langs[rand_lang])
     # If we don't have photos, get some photos
@@ -446,8 +465,9 @@ def main():
     photo = cur.fetchone()[1:]
     # Make some tags! Gotta promote through randomness!
     tags = flickr_tags(photo)
-    caption, link = build_caption(photo, final_quote)
+    caption, link = build_caption(photo, final_quote, ptype="quote")
     tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
+    twitter_post('final.jpg', caption)
     # Clean up after myself
     clear_photo(rand_pic)
     cleanup()
