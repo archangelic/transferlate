@@ -27,7 +27,7 @@ oauth_token = tconf['oauth_token']
 oauth_secret = tconf['oauth_secret']
 blog = tconf['blog_host']
 if not blog.startswith('http://'):
-    blog = blog + 'http://'
+    blog = 'http://' + blog
 
 fconf = config['flickr']
 apikey = fconf['apikey']
@@ -149,10 +149,7 @@ def clean_quote(text):
 
 def cleanup():
     for each in os.listdir('.'):
-        if each.endswith('.srt'):
-            logger.info("Removing: "+each)
-            os.remove(each)
-        if each.endswith('.jpg'):
+        if each.endswith(('.srt', '.jpg', '.vtt')):
             logger.info("Removing: "+each)
             os.remove(each)
 
@@ -284,8 +281,12 @@ def get_subs(yt_links):
             call(shlex.split(command))
             contents = os.listdir('.')
             for each in contents:
-                if each.endswith('.srt'):
-                    subs = pysrt.open(each)
+                # Look for .vtt files because of issue #9073 in youtube-dl
+                if each.endswith('.vtt'):
+                    convertCommand = "ffmpeg -i " + each + " " + each + ".srt"
+                    call(shlex.split(convertCommand))
+                    subFile = each + ".srt"
+                    subs = pysrt.open(subFile)
                     has_subtitles = True
                     logger.info("Chosen YT video: "+chosen_one)
             if not has_subtitles:
@@ -300,7 +301,7 @@ def get_videos():  # Gets videos by scraping the youtube search page for links
     rand_word = random.choice(wordlist)
     results = urllib.request.urlopen(
         'https://www.youtube.com/results?search_query=' + rand_word).read()
-    soup = BeautifulSoup(results)
+    soup = BeautifulSoup(results, "lxml")
     yt_links = {}
     for link in soup.find_all('a'):
         x = link.get('href')
@@ -335,6 +336,28 @@ def make_tags(quote, length=5):
     tags = tags + run_id
     logger.info("Tags: " + tags)
     return tags
+
+
+# Translate is broke half the time so I'm improvising.
+def quote_fallback(subs):
+    logger.error("Falling back to just picking a random quote")
+    long_enough = False
+    x = 0
+    while not long_enough:
+        if x == 10:
+            cleanup()
+            yt_links = get_videos()
+            subs = get_subs(yt_links)
+            x = 0
+        subsection = random.choice(subs)
+        quote = subsection.text.replace('\n', ' ')
+        final_quote = clean_quote(quote)
+        if (len(final_quote.split()) > 6) and (len(final_quote.split()) < 15):
+            logger.info("Cleaning this text: "+quote)
+            long_enough = True
+        x += 15
+    logger.info("Used quote: "+final_quote)
+    return final_quote
 
 
 def sub_translate(subs):
@@ -399,7 +422,10 @@ def main():
     subs = get_subs(yt_links)
     # Time to pick our text from the subs and
     # make sure the translated string is long enough
-    final_quote = sub_translate(subs)
+    try:
+        final_quote = sub_translate(subs)
+    except:
+        final_quote = quote_fallback(subs)
     # Pick a random photo and make sure it is one we haven't used before
     rand_pic, url, width, height = get_photo()
     newphoto = False
