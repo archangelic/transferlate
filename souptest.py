@@ -199,7 +199,7 @@ def flickr_tags(photo):
     for each in newtags:
         i = each.strip().strip(
             ".!?@#$%^&*()-_=+,<>/;:'[]{}`~").strip('"').lower()
-        if i:
+        if i.isalpha():
             tags_select.append(i)
     tagdict = {}
     taglist = []
@@ -298,7 +298,8 @@ def get_subs(yt_links):
                 # Look for .vtt files because of issue #9073 in youtube-dl
                 if each.endswith('.vtt'):
                     convertCommand = "ffmpeg -i " + each + " " + each + ".srt"
-                    call(shlex.split(convertCommand))
+                    with open(os.devnull, "w") as f:
+                        call(shlex.split(convertCommand), stdout=f, stderr=f)
                     subFile = each + ".srt"
                     subs = pysrt.open(subFile)
                     has_subtitles = True
@@ -425,9 +426,11 @@ def tumblr_post(pic, caption, pictags=None,
         tparams['link'] = flickr
     client.post('post', blog_url=blog, params=tparams)
 
-def twitter_post(pic, caption):
-    caption = caption.replace("\\", "").strip(">").strip("`")
-    logger.info("Posting to twitter")
+def twitter_post(pic, caption, tags):
+    tagList = tags.split(',')
+    tag = random.choice(tagList[:4])
+    caption = caption.replace("\\", "").strip(">").strip("`") + " #" + tag
+    logger.info("Posting to twitter: " + caption)
     tw.update_with_media(pic, status=caption)
     
     
@@ -467,7 +470,7 @@ def main():
     tags = flickr_tags(photo)
     caption, link = build_caption(photo, final_quote, ptype="quote")
     tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
-    twitter_post('final.jpg', caption)
+    twitter_post('final.jpg', caption, tags)
     # Clean up after myself
     clear_photo(rand_pic)
     cleanup()
