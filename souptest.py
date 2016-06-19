@@ -3,7 +3,6 @@ import random
 import shlex
 import os
 import pysrt
-import goslate
 import flickrapi
 import logging
 import logging.handlers
@@ -17,7 +16,6 @@ from tumblpy import Tumblpy
 from configobj import ConfigObj
 
 config = ConfigObj('api.conf')
-gs = goslate.Goslate()
 con = lite.connect('soup.db')
 cur = con.cursor()
 
@@ -62,14 +60,6 @@ cur.execute('SELECT * FROM Words')
 words = cur.fetchall()
 for each in words:
     wordlist.append(each[1])
-# Build list of languages accepted by goslate
-cur.execute('SELECT * FROM Languages')
-languages = cur.fetchall()
-langs = {}
-for each in languages:
-    langs[each[1]] = each[2]
-langs.pop('en')
-rand_lang = random.choice(list(langs.keys()))
 # Build a list of photos we have already used
 cur.execute('SELECT * FROM old_photos')
 old_photos = cur.fetchall()
@@ -95,12 +85,10 @@ fhandler.setFormatter(formatter)
 logger.addHandler(fhandler)
 
 
-def build_caption(photo, quote, ptype="flickr", puser=""):
+def build_caption(quote):
     logger.info("Building caption for Tumblr")
-    caption = """>`%s`
-
-Photo: [%s](%s) from [%s](%s)""" % (quote, title, flickr, owner, profile)
-    return caption, flickr
+    caption = ">`%s`" % (quote)
+    return caption
 
 
 def clean_quote(text):
@@ -192,15 +180,14 @@ def get_photo():  # Picks a random photo and grabs data to give to the script.
 
 def get_photo_archive(counter=30):  # Builds the photo archive
     logger.info("Building photo archive")
-    tagchoices = ['landscape', 'nature']
     for each in range(1, counter):
         rand_word = random.choice(wordlist)
         photos = flickr.photos.search(
             text=rand_word,
-            extras='url_l,url_o,path_alias,owner_name,license,tags',
+            extras='url_l,url_o,path_alias,tags',
             license='7',
             safesearch='1',
-            tags=random.choice(tagchoices), tag_mode='all', content_type='1')
+            tag_mode='all', content_type='1')
         for pic in photos[0]:
             cur.execute('SELECT EXISTS(SELECT * FROM Photos WHERE photo_id=?)',
                         (pic.get('id'),))
@@ -212,7 +199,6 @@ def get_photo_archive(counter=30):  # Builds the photo archive
                 title = pic.get('title')
                 pic_id = pic.get('id')
                 user = pic.get('pathalias')
-                owner = pic.get('ownername')
                 if not pic.get('url_l'):
                     url = pic.get('url_o')
                     width = pic.get('width_o')
@@ -222,11 +208,10 @@ def get_photo_archive(counter=30):  # Builds the photo archive
                     width = pic.get('width_l')
                     height = pic.get('height_l')
                 tags = pic.get('tags').replace(' ', ',')
-                license = int(pic.get('license'))
                 cur.execute("""
                 INSERT INTO Photos(photo_id, user, url, width, height, title,
-                owner, license, tags)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                tags)
+                VALUES(?, ?, ?, ?, ?, ?, ?)""",
                             (pic_id, user, url, width, height, title, owner,
                              license, tags))
                 con.commit()
@@ -239,7 +224,7 @@ def get_photo_list():
     photo_archive = {}
     for each in photos:
         (db_id, photo_id, user, url, width,
-         height, title, owner, lic, tags) = each
+         height, tags) = each
         photo_archive[photo_id] = (url, width, height)
     return photo_archive
 
@@ -314,7 +299,7 @@ def make_tags(quote, length=5):
 
 
 # Translate is broke half the time so I'm improvising.
-def quote_fallback(subs):
+def rand_quote(subs):
     logger.error("Falling back to just picking a random quote")
     long_enough = False
     x = 0
@@ -332,39 +317,6 @@ def quote_fallback(subs):
             long_enough = True
         x += 15
     logger.info("Used quote: "+final_quote)
-    return final_quote
-
-
-def sub_translate(subs):
-    logger.info("Translating from subtitle file")
-    long_enough = False
-    x = 0
-    while not long_enough:
-        if x == 10:
-            cleanup()
-            yt_links = get_videos()
-            subs = get_subs(yt_links)
-            x = 0
-        rand_section = random.choice(subs)
-        rand_quote = rand_section.text.replace('\n', ' ')
-        translation = gs.translate(str(rand_quote), rand_lang).encode('utf-8')
-        retranslate = gs.translate(translation, 'en')
-        final_quote = clean_quote(retranslate)
-        if (len(final_quote.split()) > 6) and (len(final_quote.split()) < 15):
-            logger.info("Translating this text: "+rand_quote)
-            logger.info("Cleaning this text: "+retranslate)
-            long_enough = True
-        x += 1
-    logger.info("Translated: "+final_quote)
-    return final_quote
-
-
-def translate_text(quote):
-    logger.info("Translating given text: " + quote)
-    translation = gs.translate(quote, rand_lang).encode('utf-8')
-    retranslate = gs.translate(translation, 'en')
-    final_quote = clean_quote(retranslate)
-    logger.info("Translated: " + final_quote)
     return final_quote
 
 
@@ -402,12 +354,8 @@ def main():
     # Pick a video with subtitles to gather random text from
     yt_links = get_videos()
     subs = get_subs(yt_links)
-    # Time to pick our text from the subs and
-    # make sure the translated string is long enough
-    try:
-        final_quote = sub_translate(subs)
-    except:
-        final_quote = quote_fallback(subs)
+    # Time to pick our text from the subs
+    final_quote = rand_quote(subs)
     # Pick a random photo and make sure it is one we haven't used before
     rand_pic, url, width, height = get_photo()
     newphoto = False
@@ -428,7 +376,8 @@ def main():
     photo = cur.fetchone()[1:]
     # Make some tags! Gotta promote through randomness!
     tags = flickr_tags(photo)
-    caption, link = build_caption(photo, final_quote, ptype="quote")
+    caption = build_caption(final_quote)
+    link = 'https://www.flickr.com/'+photo[1]+'/'+str(photo_id)
     tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
     twitter_post('final.jpg', caption, tags)
     # Clean up after myself
