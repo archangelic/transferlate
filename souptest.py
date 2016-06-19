@@ -76,18 +76,6 @@ old_photos = cur.fetchall()
 photolist = {}
 for each in old_photos:
     photolist[each[1]] = 1
-# List of words that don't make for good tags
-cur.execute('SELECT * FROM Bantags')
-banned = cur.fetchall()
-banned_tags = {}
-for each in banned:
-    banned_tags[each[1]] = 1
-# List of users banned by me
-cur.execute('SELECT * FROM Banusers')
-banned = cur.fetchall()
-banned_users = {}
-for each in banned:
-    banned_users[each[1]] = 1
 
 run_id = ''.join(random.choice(
         string.ascii_lowercase+string.digits) for i in range(5))
@@ -109,35 +97,10 @@ logger.addHandler(fhandler)
 
 def build_caption(photo, quote, ptype="flickr", puser=""):
     logger.info("Building caption for Tumblr")
-    if photo:
-        (photo_id, user, pic_url, width,
-         height, title, owner, license, tags) = photo
-        cur.execute('SELECT * FROM Licenses WHERE lic_id=?', (license,))
-        lic, lic_url = cur.fetchone()[2:]
-        profile = 'https://www.flickr.com/photos/'+user
-        flickr = 'https://www.flickr.com/'+user+'/'+str(photo_id)
-    else:
-        lic = None
-    if lic == 'NONE' and ptype == "flickr":
-        caption = """>`%s`
+    caption = """>`%s`
 
 Photo: [%s](%s) from [%s](%s)""" % (quote, title, flickr, owner, profile)
-        return caption, flickr
-    elif ptype == "flickr":
-        caption = """>`%s`
-
-Photo: [%s](%s) by [%s](%s) licensed under [%s](%s)""" % (quote, title, flickr,
-                                                          owner, profile, lic,
-                                                          lic_url)
-        return caption, flickr
-    if ptype == "submit":
-        caption = """>`%s`
-
-Photo submitted by %s""" % (quote, puser)
-        return caption
-    if ptype == "quote":
-        caption = ">`%s`" % (quote)
-        return caption, flickr
+    return caption, flickr
 
 
 def clean_quote(text):
@@ -207,7 +170,6 @@ def flickr_tags(photo):
         tag = random.choice(tags_select)
         if (
             (tag not in tagdict) and
-            (tag not in banned_tags) and
             (len(taglist) < 5)
         ):
             tagdict[tag] = 1
@@ -245,8 +207,7 @@ def get_photo_archive(counter=30):  # Builds the photo archive
             pic_check = cur.fetchall()[0][0]
             if (
                 pic.get('pathalias') and
-                (pic_check == 0) and
-                (pic.get('pathalias') not in banned_users)
+                (pic_check == 0)
             ):
                 title = pic.get('title')
                 pic_id = pic.get('id')
@@ -340,7 +301,6 @@ def make_tags(quote, length=5):
         tag = random.choice(tags_select)
         if (
             (tag not in tagdict) and
-            (tag not in banned_tags) and
             (len(taglist) < length)
         ):
             tagdict[tag] = 1
@@ -432,8 +392,8 @@ def twitter_post(pic, caption, tags):
     caption = caption.replace("\\", "").strip(">").strip("`") + " #" + tag
     logger.info("Posting to twitter: " + caption)
     tw.update_with_media(pic, status=caption)
-    
-    
+
+
 def main():
     logger.info("Global random language: "+langs[rand_lang])
     # If we don't have photos, get some photos
