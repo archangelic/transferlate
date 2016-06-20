@@ -9,7 +9,7 @@ def build_database():
 
     cur.execute(('CREATE TABLE IF NOT EXISTS Photos'
                  '(Id INTEGER PRIMARY KEY, photo_id INTEGER, user TEXT, url TEXT,'
-                 ' width INTEGER, height INTEGER, tags TEXT'))
+                 ' width INTEGER, height INTEGER, tags TEXT)'))
     cur.execute(('CREATE TABLE IF NOT EXISTS Words'
                  '(Id INTEGER PRIMARY KEY, word TEXT)'))
     cur.execute(("CREATE TABLE IF NOT EXISTS old_photos"
