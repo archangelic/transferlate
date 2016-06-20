@@ -177,7 +177,8 @@ def get_photo():  # Picks a random photo and grabs data to give to the script.
         if rand_pic in oldphotolist:
             cur.execute('DELETE FROM Photos WHERE photo_id=?', (rand_pic,))
             con.commit()
-            rand_pic, url, width, height = get_photo()
+            photos = get_photo_list()
+            rand_pic = random.choice(list(photos.keys()))
         else:
             newphoto = True
             url, width, height = photos[rand_pic]
@@ -216,11 +217,9 @@ def get_photo_archive(counter=30):  # Builds the photo archive
                     height = pic.get('height_l')
                 tags = pic.get('tags').replace(' ', ',')
                 cur.execute("""
-                INSERT INTO Photos(photo_id, user, url, width, height, title,
-                tags)
-                VALUES(?, ?, ?, ?, ?, ?, ?)""",
-                            (pic_id, user, url, width, height, title, owner,
-                             license, tags))
+                INSERT INTO Photos(photo_id, user, url, width, height, tags)
+                VALUES(?, ?, ?, ?, ?, ?)""",
+                            (pic_id, user, url, width, height, tags))
                 con.commit()
 
 
@@ -328,7 +327,6 @@ def twitter_post(pic, caption, tags):
 
 
 def main():
-    logger.info("Global random language: "+langs[rand_lang])
     # Pick a video with subtitles to gather random text from
     yt_links = get_videos()
     subs = get_subs(yt_links)
