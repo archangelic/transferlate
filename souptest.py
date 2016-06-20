@@ -335,7 +335,7 @@ def main():
     # Make some tags! Gotta promote through randomness!
     tags = choose_tags(photo)
     caption = build_caption(final_quote)
-    link = 'https://www.flickr.com/'+photo[1]+'/'+str(photo_id)
+    link = 'https://www.flickr.com/'+photo[1]+'/'+rand_pic
     tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
     twitter_post('final.jpg', final_quote, tags)
     # Clean up after myself
