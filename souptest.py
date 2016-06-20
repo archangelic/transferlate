@@ -141,6 +141,7 @@ caption:"%s" \
 
 def choose_tags(photo):
     phid, user, url, width, height, tagsraw = photo
+    tags_select = tagsraw.split(",")
     tagdict = {}
     taglist = []
     for i in range(1, 100):
