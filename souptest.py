@@ -63,9 +63,9 @@ for each in words:
 # Build a list of photos we have already used
 cur.execute('SELECT * FROM old_photos')
 old_photos = cur.fetchall()
-photolist = {}
+oldphotolist = {}
 for each in old_photos:
-    photolist[each[1]] = 1
+    oldphotolist[each[1]] = 1
 
 run_id = ''.join(random.choice(
         string.ascii_lowercase+string.digits) for i in range(5))
@@ -173,7 +173,15 @@ def flickr_tags(photo):
 def get_photo():  # Picks a random photo and grabs data to give to the script.
     photos = get_photo_list()
     rand_pic = random.choice(list(photos.keys()))
-    url, width, height = photos[rand_pic]
+    newphoto = False
+    while not newphoto:
+        if rand_pic in oldphotolist:
+            cur.execute('DELETE FROM Photos WHERE photo_id=?', (rand_pic,))
+            con.commit()
+            rand_pic, url, width, height = get_photo()
+        else:
+            newphoto = True
+            url, width, height = photos[rand_pic]
     logger.info("Photo chosen: "+url)
     return str(rand_pic), url, width, height
 
@@ -271,33 +279,6 @@ def get_videos():  # Gets videos by scraping the youtube search page for links
     return yt_links
 
 
-def make_tags(quote, length=5):
-    logger.info("Creating tags from quote: " + quote)
-    tags_split = quote.split()
-    tags_select = []
-    for each in tags_split:
-        i = each.strip().strip(".!?@#$%^&*()-_=+,<>/;:'[]{}`~")
-        i = i.strip('"').lower()
-        if i:
-            tags_select.append(i)
-    tagdict = {}
-    taglist = []
-    for i in range(1, 100):
-        tag = random.choice(tags_select)
-        if (
-            (tag not in tagdict) and
-            (len(taglist) < length)
-        ):
-            tagdict[tag] = 1
-            taglist.append(tag)
-    tags = ''
-    for each in taglist:
-        tags = tags + each + ','
-    tags = tags + run_id
-    logger.info("Tags: " + tags)
-    return tags
-
-
 # Translate is broke half the time so I'm improvising.
 def rand_quote(subs):
     logger.error("Falling back to just picking a random quote")
@@ -341,16 +322,13 @@ def tumblr_post(pic, caption, pictags=None,
 def twitter_post(pic, caption, tags):
     tagList = tags.split(',')
     tag = random.choice(tagList[:4])
-    caption = caption.replace("\\", "").strip(">").strip("`") + " #" + tag
+    caption = caption + " #" + tag
     logger.info("Posting to twitter: " + caption)
     tw.update_with_media(pic, status=caption)
 
 
 def main():
     logger.info("Global random language: "+langs[rand_lang])
-    # If we don't have photos, get some photos
-    if not get_photo_list():
-        get_photo_archive()
     # Pick a video with subtitles to gather random text from
     yt_links = get_videos()
     subs = get_subs(yt_links)
@@ -358,16 +336,6 @@ def main():
     final_quote = rand_quote(subs)
     # Pick a random photo and make sure it is one we haven't used before
     rand_pic, url, width, height = get_photo()
-    newphoto = False
-    while not newphoto:
-        if not get_photo_list():
-            get_photo_archive()
-        elif rand_pic in photolist:
-            cur.execute('DELETE FROM Photos WHERE photo_id=?', (rand_pic,))
-            con.commit()
-            rand_pic, url, width, height = get_photo()
-        else:
-            newphoto = True
     # Download and add text to photo
     urllib.request.urlretrieve(url, rand_pic+'.jpg')
     create_image(final_quote, rand_pic+'.jpg', width, height)
@@ -379,7 +347,7 @@ def main():
     caption = build_caption(final_quote)
     link = 'https://www.flickr.com/'+photo[1]+'/'+str(photo_id)
     tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
-    twitter_post('final.jpg', caption, tags)
+    twitter_post('final.jpg', final_quote, tags)
     # Clean up after myself
     clear_photo(rand_pic)
     cleanup()
