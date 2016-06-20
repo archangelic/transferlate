@@ -140,7 +140,7 @@ caption:"%s" \
 
 
 def flickr_tags(photo):
-    phid, user, url, width, height, title, owner, lic, tagsraw = photo
+    phid, user, url, width, height, tagsraw = photo
     picinfo = flickr.photos.getInfo(photo_id=phid)
     newtags = []
     for each in picinfo[0][11]:
