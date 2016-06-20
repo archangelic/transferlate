@@ -145,6 +145,7 @@ def flickr_tags(photo):
     newtags = []
     for each in picinfo[0][11]:
         newtags.append(each.get('raw'))
+        logger.debug(each.get('raw'))
     logger.info("Creating tags from Flickr tags: " + url)
     tags_select = []
     for each in newtags:
