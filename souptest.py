@@ -165,7 +165,6 @@ def flickr_tags(photo):
     tags = ''
     for each in taglist:
         tags = tags + each + ','
-    tags = tags + run_id
     logger.info("Tags: "+tags)
     return tags
 
@@ -314,14 +313,15 @@ def tumblr_post(pic, caption, pictags=None,
         'data': picdata
     }
     if pictags:
-        tparams['tags'] = pictags
+        tparams['tags'] = pictags + run_id
     if flickr:
         tparams['link'] = flickr
     client.post('post', blog_url=blog, params=tparams)
 
+
 def twitter_post(pic, caption, tags):
-    tagList = tags.split(',')
-    tag = random.choice(tagList[:4])
+    tagList = tags.strip(",").split(',')
+    tag = random.choice(tagList)
     caption = caption + " #" + tag
     logger.info("Posting to twitter: " + caption)
     tw.update_with_media(pic, status=caption)
