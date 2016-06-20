@@ -139,30 +139,20 @@ caption:"%s" \
     logger.info("Created overlayed text image")
 
 
-def flickr_tags(photo):
+def choose_tags(photo):
     phid, user, url, width, height, tagsraw = photo
-    picinfo = flickr.photos.getInfo(photo_id=phid)
-    newtags = []
-    for each in picinfo[0][11]:
-        newtags.append(each.get('raw'))
-        logger.debug(each.get('raw'))
-    logger.info("Creating tags from Flickr tags: " + url)
-    tags_select = []
-    for each in newtags:
-        i = each.strip().strip(
-            ".!?@#$%^&*()-_=+,<>/;:'[]{}`~").strip('"').lower()
-        if i.isalpha():
-            tags_select.append(i)
     tagdict = {}
     taglist = []
     for i in range(1, 100):
         tag = random.choice(tags_select)
         if (
             (tag not in tagdict) and
-            (len(taglist) < 5)
+            (len(taglist) < 5) and
+            (tag.isalpha())
         ):
             tagdict[tag] = 1
             taglist.append(tag)
+            logger.debug("Chosen tag: " + tag)
     tags = ''
     for each in taglist:
         tags = tags + each + ','
@@ -342,7 +332,7 @@ def main():
     cur.execute('SELECT * FROM Photos WHERE photo_id=?', (rand_pic,))
     photo = cur.fetchone()[1:]
     # Make some tags! Gotta promote through randomness!
-    tags = flickr_tags(photo)
+    tags = choose_tags(photo)
     caption = build_caption(final_quote)
     link = 'https://www.flickr.com/'+photo[1]+'/'+str(photo_id)
     tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
