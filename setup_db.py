@@ -33,10 +33,18 @@ def migrate():
     bcur.execute("SELECT photo_id, user, url, width, height, tags FROM Photos")
     photos = bcur.fetchall()
     for each in photos:
-        # scur.execute('INSERT INTO Photos(photo_id, user, url, width, height, tags) VALUES(?, ?, ?, ?, ?, ?)',
-                    #  tuple(each))
-        print(each)
+        scur.execute('INSERT INTO Photos(photo_id, user, url, width, height, tags) VALUES(?, ?, ?, ?, ?, ?)',
+                     each)
+    sp.commit()
+    bcur.execute("SELECT photo FROM old_photos")
+    oldphotos = bcur.fetchall()
+    for each in oldphotos:
+        scur.execute('INSERT INTO old_photos(photo) VALUES(?)', each)
+    sp.commit()
 
 
 if __name__ == "__main__":
-    build_database()
+    if "soup.db" in os.listdir():
+        migrate()
+    else:
+        build_database()
