@@ -144,7 +144,11 @@ def choose_tags(photo):
     picinfo = flickr.photos.getInfo(photo_id=phid)
     newtags = []
     for each in picinfo[0][11]:
-        newtags.append(each.get('raw'))
+        t = each.get('raw')
+        if len(t.split(":")) > 1:
+            newtags.append(t.split(":")[1])
+        else:
+            newtags.append(t)
     logger.info("Creating tags from Flickr tags")
     tags_select = []
     for each in newtags:
@@ -158,7 +162,6 @@ def choose_tags(photo):
         tag = random.choice(tags_select)
         if (
             (tag not in tagdict) and
-            (tag not in banned_tags) and
             (len(taglist) < 5)
         ):
             tagdict[tag] = 1
