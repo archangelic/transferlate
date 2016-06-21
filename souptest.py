@@ -140,26 +140,35 @@ caption:"%s" \
 
 
 def choose_tags(photo):
-    phid, user, url, width, height, tagsraw = photo
-    tags_select = tagsraw.split(",")
+    phid = photo[0]
+    picinfo = flickr.photos.getInfo(photo_id=phid)
+    newtags = []
+    for each in picinfo[0][11]:
+        newtags.append(each.get('raw'))
+    logger.info("Creating tags from Flickr tags: " + url)
+    tags_select = []
+    for each in newtags:
+        i = each.strip().strip(
+            ".!?@#$%^&*()-_=+,<>/;:'[]{}`~").strip('"').lower()
+        if i.isalpha():
+            tags_select.append(i)
     tagdict = {}
     taglist = []
     for i in range(1, 100):
         tag = random.choice(tags_select)
         if (
             (tag not in tagdict) and
-            (len(taglist) < 5) and
-            (tag.isalpha())
+            (tag not in banned_tags) and
+            (len(taglist) < 5)
         ):
             tagdict[tag] = 1
             taglist.append(tag)
-            logger.debug("Chosen tag: " + tag)
     tags = ''
     for each in taglist:
         tags = tags + each + ','
+    tags = tags
     logger.info("Tags: "+tags)
     return tags
-
 
 def get_photo():  # Picks a random photo and grabs data to give to the script.
     photos = get_photo_list()
