@@ -259,7 +259,7 @@ def get_subs(yt_links):
         if yt_links:
             logger.debug(yt_links)
             chosen_key = random.choice(list(yt_links.keys()))
-            logger.debug(chosen_key, run_id)
+            logger.debug(chosen_key)
             chosen_one = yt_links[chosen_key]
             command = ("""/usr/local/bin/youtube-dl -q --no-warnings\
             --no-playlist --write-sub --write-auto-sub --sub-lang "en"\
