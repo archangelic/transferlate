@@ -242,9 +242,13 @@ def get_photo_list():
 
 def get_subs(yt_links):
     has_subtitles = False
+    x = 1
     while not has_subtitles:
+        logger.debug("Starting loop: " + str(x) + " " + run_id)
         if yt_links:
+            loger.debug(yt_links, run_id)
             chosen_key = random.choice(list(yt_links.keys()))
+            logger.debug(chosen_key, run_id)
             chosen_one = yt_links[chosen_key]
             command = ("""/usr/local/bin/youtube-dl -q --no-warnings\
             --no-playlist --write-sub --write-auto-sub --sub-lang "en"\
@@ -262,9 +266,12 @@ def get_subs(yt_links):
                     has_subtitles = True
                     logger.info("Chosen YT video: "+chosen_one)
             if not has_subtitles:
+                logger.debug("no subs", x, run_id)
                 yt_links.pop(chosen_key)
         else:
+            logger.debug("get videos", x, run_id)
             yt_links = get_videos()
+        x += 1
     return subs
 
 
