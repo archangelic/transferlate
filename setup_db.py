@@ -45,6 +45,10 @@ def migrate():
 
 if __name__ == "__main__":
     if "soup.db" in os.listdir():
-        migrate()
+        try:
+            migrate()
+        except:
+            build_database()
+            migrate()
     else:
         build_database()
