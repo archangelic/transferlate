@@ -338,7 +338,11 @@ def main():
     # Time to pick our text from the subs
     final_quote = rand_quote(subs)
     # Pick a random photo and make sure it is one we haven't used before
-    rand_pic, url, width, height = get_photo()
+    try:
+        rand_pic, url, width, height = get_photo()
+    except:
+        get_photo_archive()
+        rand_pic, url, width, height = get_photo()
     # Download and add text to photo
     urllib.request.urlretrieve(url, rand_pic+'.jpg')
     create_image(final_quote, rand_pic+'.jpg', width, height)
