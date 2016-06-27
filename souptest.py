@@ -10,6 +10,7 @@ import string
 import urllib.request
 import tweepy
 import sqlite3 as lite
+import sys
 from bs4 import BeautifulSoup
 from subprocess import call
 from tumblpy import Tumblpy
