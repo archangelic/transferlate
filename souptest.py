@@ -284,7 +284,6 @@ def get_videos():  # Gets videos by scraping the youtube search page for links
 
 # Translate is broke half the time so I'm improvising.
 def rand_quote(subs):
-    logger.error("Falling back to just picking a random quote")
     long_enough = False
     x = 0
     while not long_enough:
