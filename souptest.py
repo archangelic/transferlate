@@ -257,7 +257,7 @@ def get_subs(yt_links):
     while not has_subtitles:
         logger.debug("Starting loop: " + str(x) + " " + run_id)
         if yt_links:
-            loger.debug(yt_links, run_id)
+            logger.debug(yt_links, run_id)
             chosen_key = random.choice(list(yt_links.keys()))
             logger.debug(chosen_key, run_id)
             chosen_one = yt_links[chosen_key]
