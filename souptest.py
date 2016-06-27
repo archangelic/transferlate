@@ -19,6 +19,11 @@ config = ConfigObj('api.conf')
 con = lite.connect('soup.db')
 cur = con.cursor()
 
+try:
+    debug_mode = config['debug_mode']
+except KeyError:
+    debug_mode = False
+
 tconf = config['tumblr']
 consumer_key = tconf['consumer_key']
 consumer_secret = tconf['consumer_secret']
@@ -83,6 +88,11 @@ formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - '+run_id+' - %(message)s')
 fhandler.setFormatter(formatter)
 logger.addHandler(fhandler)
+
+if debug_mode:
+    out = logging.StreamHandler(stream=sys.stdout)
+    out.setFormatter(formatter)
+    logger.addHandler(out)
 
 
 def build_caption(quote):
