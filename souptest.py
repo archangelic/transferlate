@@ -194,12 +194,13 @@ def get_photo_archive(counter=30):  # Builds the photo archive
     logger.info("Building photo archive")
     for each in range(1, counter):
         rand_word = random.choice(wordlist)
+        tagchoices = ['nature', 'landscape', 'plant', 'animal']
         photos = flickr.photos.search(
             text=rand_word,
             extras='url_l,url_o,path_alias,tags',
             license='7',
             safesearch='1',
-            tag_mode='all', content_type='1')
+            tags=random.choice(tagchoices), tag_mode='all', content_type='1')
         for pic in photos[0]:
             cur.execute('SELECT EXISTS(SELECT * FROM Photos WHERE photo_id=?)',
                         (pic.get('id'),))
