@@ -15,6 +15,13 @@ from bs4 import BeautifulSoup
 from subprocess import call
 from tumblpy import Tumblpy
 from configobj import ConfigObj
+from setproctitle import setproctitle
+
+run_id = ''.join(random.choice(
+        string.ascii_lowercase+string.digits) for i in range(5))
+
+# rename the process for troubleshooting
+setproctitle("souptest-"+run_id)
 
 config = ConfigObj('api.conf')
 con = lite.connect('soup.db')
@@ -72,9 +79,6 @@ old_photos = cur.fetchall()
 oldphotolist = {}
 for each in old_photos:
     oldphotolist[each[1]] = 1
-
-run_id = ''.join(random.choice(
-        string.ascii_lowercase+string.digits) for i in range(5))
 
 logger = logging.getLogger('souptest')
 logger.setLevel(logging.DEBUG)
