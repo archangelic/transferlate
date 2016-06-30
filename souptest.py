@@ -11,7 +11,7 @@ import urllib.request
 import tweepy
 import sqlite3 as lite
 import sys
-import youtub_dl
+import youtube_dl
 from bs4 import BeautifulSoup
 from subprocess import call
 from tumblpy import Tumblpy
