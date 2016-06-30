@@ -11,6 +11,7 @@ import urllib.request
 import tweepy
 import sqlite3 as lite
 import sys
+import youtub_dl
 from bs4 import BeautifulSoup
 from subprocess import call
 from tumblpy import Tumblpy
@@ -261,14 +262,21 @@ def get_subs(yt_links):
     while not has_subtitles:
         logger.debug("Starting loop: " + str(x))
         if yt_links:
-            logger.debug(yt_links)
             chosen_key = random.choice(list(yt_links.keys()))
             logger.debug(chosen_key)
             chosen_one = yt_links[chosen_key]
-            command = ("""/usr/local/bin/youtube-dl -q --no-warnings\
-            --no-playlist --write-sub --write-auto-sub --sub-lang "en"\
-            --skip-download "%s" --restrict-filenames""" % (chosen_one,))
-            call(shlex.split(command))
+            ydl_opts = {
+                'quiet': True,
+	            'no_warnings': True,
+	            'noplaylist': True,
+	            'writesubtitles': True,
+                'writeautomaticsub': True,
+                'subtitleslangs': ["en"],
+                'skip_download': True,
+                'restrictfilenames': True,
+            }
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([chosen_one])
             contents = os.listdir('.')
             for each in contents:
                 # Look for .vtt files because of issue #9073 in youtube-dl
