@@ -29,7 +29,7 @@ con = lite.connect('soup.db')
 cur = con.cursor()
 
 try:
-    debug_mode = config['debug_mode']
+    debug_mode = config.as_bool('debug_mode')
 except KeyError:
     debug_mode = False
 
