@@ -1,0 +1,22 @@
+debug_mode = False
+
+[tumblr]
+blog_host = ""
+consumer_key = ""
+consumer_secret = ""
+oauth_token = ""
+oauth_secret = ""
+
+[flickr]
+apikey = ""
+apisecret = ""
+
+[twitter]
+consumer_key = ""
+consumer_secret = ""
+key = ""
+secret = ""
+
+[log]
+maxBytes = 1000000
+backupCount = 10

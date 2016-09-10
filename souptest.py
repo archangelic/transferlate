@@ -334,12 +334,12 @@ def rand_quote(subs):
 
 
 def tumblr_post(pic, caption, pictags=None,
-                flickr=None, state='queue', tformat='markdown'):
+                flickr=None, post_state='queue', tformat='markdown'):
     caption = caption.replace("\\", "")
     logger.info("Posting to Tumblr")
     picdata = open(pic, 'rb')
     tparams = {
-        'state': state,
+        'state': post_state,
         'type': 'photo',
         'format': tformat,
         'caption': caption,
