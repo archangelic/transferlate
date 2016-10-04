@@ -355,6 +355,7 @@ def tumblr_post(pic, caption, pictags=None,
 def twitter_post(pic, caption, tags):
     tagList = tags.strip(",").split(',')
     tag = random.choice(tagList)
+    caption = caption.replace('\\', '')
     caption = caption + " #" + tag
     logger.info("Posting to twitter: " + caption)
     tw.update_with_media(pic, status=caption)
@@ -382,7 +383,7 @@ def main():
     tags = choose_tags(photo)
     caption = build_caption(final_quote)
     link = 'https://www.flickr.com/'+photo[1]+'/'+rand_pic
-    tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
+    # tumblr_post('final.jpg', caption, pictags=tags, flickr=link)
     twitter_post('final.jpg', final_quote, tags)
     # Clean up after myself
     clear_photo(rand_pic)
