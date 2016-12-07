@@ -7,7 +7,7 @@ import flickrapi
 import logging
 import logging.handlers
 import string
-import urllib.request
+import urllib
 import tweepy
 import sqlite3 as lite
 import sys
@@ -301,7 +301,7 @@ def get_subs(yt_links):
 def get_videos():  # Gets videos by scraping the youtube search page for links
     logger.info("Getting list of YouTube videos")
     rand_word = random.choice(wordlist)
-    results = urllib.request.urlopen(
+    results = urllib.urlopen(
         'https://www.youtube.com/results?search_query=' + rand_word).read()
     soup = BeautifulSoup(results, "lxml")
     yt_links = {}
@@ -374,7 +374,7 @@ def main():
         get_photo_archive()
         rand_pic, url, width, height = get_photo()
     # Download and add text to photo
-    urllib.request.urlretrieve(url, rand_pic+'.jpg')
+    urllib.urlretrieve(url, rand_pic+'.jpg')
     create_image(final_quote, rand_pic+'.jpg', width, height)
     # Build info for tumblr
     cur.execute('SELECT * FROM Photos WHERE photo_id=?', (rand_pic,))
